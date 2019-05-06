@@ -24,6 +24,8 @@ static const char sccsid[] = "@(#)galaxy.c 4.04 97/07/28 xlockmore";
  * other special, indirect and consequential damages.
  *
  * Revision History:
+ * 06-May-19: Added min/max galaxy size arguments by Gabriel Cholette-Rioux
+              solutions@gcholette.com
  * 26-Aug-00: robert.nagtegaal@phil.uu.nl and roland@tschai.demon.nl:
  *            various improvements
  * 10-May-97: jwz@jwz.org: turned into a standalone program.
@@ -60,10 +62,16 @@ static const char sccsid[] = "@(#)galaxy.c 4.04 97/07/28 xlockmore";
 static Bool tracks;
 static Bool spin;
 static Bool dbufp;
+static float minSize;
+static float maxSize;
+static int maxStars;
 
 #define DEF_TRACKS "True"
 #define DEF_SPIN   "True"
 #define DEF_DBUF   "True"
+#define DEF_MINSIZE  "0.1"
+#define DEF_MAXSIZE  "0.15"
+#define DEF_MAXSTARS  "3000"
 
 static XrmOptionDescRec opts[] =
 {
@@ -73,6 +81,9 @@ static XrmOptionDescRec opts[] =
  {"+spin",   ".galaxy.spin",   XrmoptionNoArg, "off"},
  {"-dbuf",   ".galaxy.dbuf",   XrmoptionNoArg, "on"},
  {"+dbuf",   ".galaxy.dbuf",   XrmoptionNoArg, "off"},
+ {"-minSize",   ".galaxy.minSize",   XrmoptionSepArg, "0.1"},
+ {"-maxSize",   ".galaxy.maxSize",   XrmoptionSepArg, "0.15"},
+ {"-maxStars",   ".galaxy.maxStars",   XrmoptionSepArg, "3000"}
 };
 
 static argtype vars[] =
@@ -80,6 +91,9 @@ static argtype vars[] =
  {&tracks, "tracks", "Tracks", DEF_TRACKS, t_Bool},
  {&spin,   "spin",   "Spin",   DEF_SPIN,   t_Bool},
  {&dbufp,  "dbuf",   "Dbuf",   DEF_DBUF,   t_Bool}, 
+ {&minSize,  "minSize",   "MinSize",   DEF_MINSIZE,   t_Float},
+ {&maxSize,  "maxSize",   "MaxSize",   DEF_MAXSIZE,   t_Float},
+ {&maxStars,  "maxStars",   "MaxStars",   DEF_MAXSTARS,   t_Int}
 };
 
 static OptionStruct desc[] =
@@ -87,6 +101,9 @@ static OptionStruct desc[] =
  {"-/+tracks", "turn on/off star tracks"},
  {"-/+spin",   "do/don't spin viewpoint"},
  {"-/+dbuf",   "turn on/off double buffering."},
+ {"-minSize",   "minimum galaxy size (floating point default: 0.1)."},
+ {"-maxSize",   "maximum galaxy size (floating point default: 0.15)."},
+ {"-maxStars",   "maximum star amount (Integer default: 3500)"}
 };
 
 ENTRYPOINT ModeSpecOpt galaxy_opts =
@@ -106,7 +123,7 @@ ENTRYPOINT ModeSpecOpt galaxy_opts =
 #define MAX_STARS    3000
 #define MAX_IDELTAT    50
 /* These come originally from the Cluster-version */
-#define DEFAULT_GALAXIES  3
+#define DEFAULT_GALAXIES  2
 #define DEFAULT_STARS    1000
 #define DEFAULT_HITITERATIONS  7500
 #define DEFAULT_IDELTAT    200 /* 0.02 */
@@ -115,9 +132,6 @@ ENTRYPOINT ModeSpecOpt galaxy_opts =
 #define sqrt_EPSILON 0.0001
 
 #define DELTAT (MAX_IDELTAT * 0.0001)
-
-#define GALAXYRANGESIZE  0.1
-#define GALAXYMINSIZE  0.15
 #define QCONS    0.001
 
 
@@ -219,7 +233,7 @@ startover(ModeInfo * mi)
    (void) free((void *) gt->stars);
    gt->stars = NULL;
   }
-  gt->nstars = (NRAND(MAX_STARS / 2)) + MAX_STARS / 2;
+  gt->nstars = (NRAND( maxStars / 2)) + maxStars / 2;
   gt->stars = (Star *) malloc(gt->nstars * sizeof (Star));
   gt->oldpoints = (XPoint *) malloc(gt->nstars * sizeof (XPoint));
   gt->newpoints = (XPoint *) malloc(gt->nstars * sizeof (XPoint));
@@ -253,7 +267,7 @@ startover(ModeInfo * mi)
 
   gt->mass = (int) (FLOATRAND * 1000.0) + 1;
 
-  gp->size = GALAXYRANGESIZE * FLOATRAND + GALAXYMINSIZE;
+  gp->size = maxSize * FLOATRAND + minSize;
 
   for (j = 0; j < gt->nstars; ++j) {
    Star       *st = &gt->stars[j];
