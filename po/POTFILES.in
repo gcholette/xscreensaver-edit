@@ -1,8 +1,10 @@
-# Auto-generated: Fri Dec 28 16:21:54 PST 2018
+# Auto-generated: Mon Oct 11 18:04:31 PDT 2021
 driver/demo-Gtk-conf.c
 driver/demo-Gtk.c
+driver/dialog.c
 driver/screensaver-properties.desktop.in
-driver/xscreensaver-demo.glade2.in
+driver/subprocs.c
+driver/xscreensaver.ui
 hacks/config/abstractile.xml
 hacks/config/anemone.xml
 hacks/config/anemotaxis.xml
@@ -16,6 +18,8 @@ hacks/config/atlantis.xml
 hacks/config/attraction.xml
 hacks/config/atunnel.xml
 hacks/config/barcode.xml
+hacks/config/beats.xml
+hacks/config/binaryhorizon.xml
 hacks/config/binaryring.xml
 hacks/config/blaster.xml
 hacks/config/blinkbox.xml
@@ -41,6 +45,7 @@ hacks/config/cloudlife.xml
 hacks/config/companioncube.xml
 hacks/config/compass.xml
 hacks/config/coral.xml
+hacks/config/covid19.xml
 hacks/config/crackberg.xml
 hacks/config/critical.xml
 hacks/config/crumbler.xml
@@ -56,6 +61,7 @@ hacks/config/cynosure.xml
 hacks/config/dangerball.xml
 hacks/config/decayscreen.xml
 hacks/config/deco.xml
+hacks/config/deepstars.xml
 hacks/config/deluxe.xml
 hacks/config/demon.xml
 hacks/config/discoball.xml
@@ -70,6 +76,7 @@ hacks/config/engine.xml
 hacks/config/epicycle.xml
 hacks/config/eruption.xml
 hacks/config/esper.xml
+hacks/config/etruscanvenus.xml
 hacks/config/euler2d.xml
 hacks/config/extrusion.xml
 hacks/config/fadeplot.xml
@@ -93,6 +100,7 @@ hacks/config/gears.xml
 hacks/config/geodesic.xml
 hacks/config/geodesicgears.xml
 hacks/config/gflux.xml
+hacks/config/gibson.xml
 hacks/config/glblur.xml
 hacks/config/glcells.xml
 hacks/config/gleidescope.xml
@@ -108,10 +116,12 @@ hacks/config/glsnake.xml
 hacks/config/gltext.xml
 hacks/config/goop.xml
 hacks/config/grav.xml
+hacks/config/gravitywell.xml
 hacks/config/greynetic.xml
 hacks/config/halftone.xml
 hacks/config/halo.xml
 hacks/config/handsy.xml
+hacks/config/headroom.xml
 hacks/config/helix.xml
 hacks/config/hexadrop.xml
 hacks/config/hexstrut.xml
@@ -147,6 +157,7 @@ hacks/config/lmorph.xml
 hacks/config/lockward.xml
 hacks/config/loop.xml
 hacks/config/m6502.xml
+hacks/config/marbling.xml
 hacks/config/maze.xml
 hacks/config/maze3d.xml
 hacks/config/memscroller.xml
@@ -191,7 +202,6 @@ hacks/config/queens.xml
 hacks/config/raverhoop.xml
 hacks/config/razzledazzle.xml
 hacks/config/rd-bomb.xml
-hacks/config/rdbomb.xml
 hacks/config/ripples.xml
 hacks/config/rocks.xml
 hacks/config/romanboy.xml
@@ -201,6 +211,7 @@ hacks/config/rotzoomer.xml
 hacks/config/rubik.xml
 hacks/config/rubikblocks.xml
 hacks/config/sballs.xml
+hacks/config/scooter.xml
 hacks/config/shadebobs.xml
 hacks/config/sierpinski.xml
 hacks/config/sierpinski3d.xml
@@ -210,6 +221,7 @@ hacks/config/slip.xml
 hacks/config/sonar.xml
 hacks/config/speedmine.xml
 hacks/config/sphere.xml
+hacks/config/sphereeversion.xml
 hacks/config/spheremonics.xml
 hacks/config/spiral.xml
 hacks/config/splitflap.xml

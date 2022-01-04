@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2012-2016 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright (c) 2012-2020 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -16,7 +16,7 @@
 
 #include "utils.h"
 
-#ifdef USE_IPHONE // whole file
+#ifdef HAVE_IPHONE // whole file
 
 #include "textclient.h"
 
@@ -62,6 +62,13 @@ textclient_mobile_date_string (void)
   NSString *_result;
 }
 
+- (void)dealloc
+{
+  [_url release];
+  [_result release];
+  [super dealloc];
+}
+
 + (TextLoader *) sharedLoader
 {
   static TextLoader *singleton = nil;
@@ -74,12 +81,33 @@ textclient_mobile_date_string (void)
 
 - (void) startLoading
 {
-  // NSLog(@"textclient thread loading %@", self.url);
+# ifndef __OPTIMIZE__
+  NSLog(@"textclient thread loading %@", self.url);
+# endif
+  NSError *e = 0;
   self.result = [NSString stringWithContentsOfURL: self.url
                           encoding: NSUTF8StringEncoding
-                          error: nil];
-  // NSLog(@"textclient thread finished %@ (length %d)", self.url,
-  //      (unsigned int) [self.result length]);
+                          error: &e];
+  if (!self.result || [self.result length] == 0) {
+    NSLog(@"URL error: %@: %@", self.url, e);
+    NSString *s = [[[[self.url host]
+                      stringByAppendingString:@": "]
+                        stringByAppendingString:
+                         (e ? [e localizedDescription] : @"null response")]
+                       stringByAppendingString:@"\n\n"];
+
+# if TARGET_IPHONE_SIMULATOR
+    // Aug 2019: loading URLs in the simulator no longer works, hooray!
+    // Print that, because I keep forgetting.
+    s = [@"Simulator can't load URLs:\n\n" stringByAppendingString:s];
+# endif
+
+    self.result = s;
+  }
+# ifndef __OPTIMIZE__
+  NSLog(@"textclient thread finished %@ (length %d)", self.url,
+        (unsigned int) [self.result length]);
+# endif
 }
 
 @end
@@ -103,19 +131,25 @@ textclient_mobile_url_string (Display *dpy, const char *url)
   // URL #2, it might get URL #1 instead.  Oh well, who cares.
 
   if (result) {						// Thread finished
-    // NSLog(@"textclient finished %s (length %d)", url,
-    //       (unsigned int) [result length]);
+# ifndef __OPTIMIZE__
+    NSLog(@"textclient finished %s (length %d)", url,
+          (unsigned int) [result length]);
+# endif
     char *s = strdup ([result cStringUsingEncoding:NSUTF8StringEncoding]);
     loader.url    = nil;
     loader.result = nil;
     return s;
 
   } else if ([loader url]) {				// Waiting on thread
-    // NSLog(@"textclient waiting...");
+# ifndef __OPTIMIZE__
+    NSLog(@"textclient waiting...");
+# endif
     return 0;
 
   } else {						// Launch thread
-    // NSLog(@"textclient launching %s...", url);
+# ifndef __OPTIMIZE__
+    NSLog(@"textclient launching %s...", url);
+# endif
     loader.url =
       [NSURL URLWithString:
                [NSString stringWithCString: url
@@ -126,4 +160,4 @@ textclient_mobile_url_string (Display *dpy, const char *url)
   }
 }
 
-#endif // USE_IPHONE -- whole file
+#endif // HAVE_IPHONE -- whole file

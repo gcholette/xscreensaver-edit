@@ -1,4 +1,4 @@
-/* glitchpeg, Copyright (c) 2018 Jamie Zawinski <jwz@jwz.org>
+/* glitchpeg, Copyright (c) 2018-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -22,9 +22,6 @@
 #endif
 
 #include <sys/stat.h>
-
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 struct state {
   Display *dpy;
@@ -83,13 +80,13 @@ draw_image (Display *dpy, Window window, Visual *v, GC gc,
   int x, y, w2, h2, xoff, yoff;
   double xs, ys, s;
 
-  unsigned long crpos=0, cgpos=0, cbpos=0, capos=0; /* bitfield positions */
+  unsigned long crpos=0, cgpos=0, cbpos=0/*,capos=0*/; /* bitfield positions */
   unsigned long srpos=0, sgpos=0, sbpos=0;
   unsigned long srmsk=0, sgmsk=0, sbmsk=0;
   unsigned long srsiz=0, sgsiz=0, sbsiz=0;
 
 # ifdef HAVE_JWXYZ
-  // BlackPixel has alpha: 0xFF000000.
+  /* BlackPixel has alpha: 0xFF000000. */
   unsigned long black = BlackPixelOfScreen (DefaultScreenOfDisplay (dpy));
 #else
   unsigned long black = 0;
@@ -130,9 +127,9 @@ draw_image (Display *dpy, Window window, Visual *v, GC gc,
 
   /* 'in' is RGBA in client endianness.  Convert to what the server wants. */
   if (bigendian())
-    crpos = 24, cgpos = 16, cbpos =  8, capos =  0;
+    crpos = 24, cgpos = 16, cbpos =  8/*, capos =  0*/;
   else
-    crpos =  0, cgpos =  8, cbpos = 16, capos = 24;
+    crpos =  0, cgpos =  8, cbpos = 16/*, capos = 24*/;
 
   /* Iterate the destination rectangle and pull in the corresponding
      scaled and cropped source pixel, or black. Nearest-neighbor is fine.
@@ -177,6 +174,7 @@ static FILE *
 open_image_name_pipe (void)
 {
   char *s;
+  FILE *pipe;
 
   /* /bin/sh on OS X 10.10 wipes out the PATH. */
   const char *path = getenv("PATH");
@@ -199,13 +197,13 @@ open_image_name_pipe (void)
 
   *s = 0;
 
-  FILE *pipe = popen (cmd, "r");
+  pipe = popen (cmd, "r");
   free (cmd);
   return pipe;
 }
 
 
-/* Duplicated from utils/grabclient.c */
+/* Mostly duplicated from utils/grabclient.c */
 static void
 xscreensaver_getimage_file_cb (XtPointer closure, int *source, XtInputId *id)
 {
@@ -214,35 +212,46 @@ xscreensaver_getimage_file_cb (XtPointer closure, int *source, XtInputId *id)
   struct state *st = (struct state *) closure;
   char buf[10240];
   char *file = buf;
+  char *result;
   FILE *fp;
   struct stat stat;
   int n;
   unsigned char *s;
   int L;
 
+  static int error_count = 0;
+
   *buf = 0;
-  fgets (buf, sizeof(buf)-1, st->pipe);
+  result = fgets (buf, sizeof(buf)-1, st->pipe);
   pclose (st->pipe);
   st->pipe = 0;
   XtRemoveInput (st->pipe_id);
   st->pipe_id = 0;
+  if (!result) goto FAIL;
 
   /* strip trailing newline */
   L = strlen(buf);
   while (L > 0 && (buf[L-1] == '\r' || buf[L-1] == '\n'))
     buf[--L] = 0;
 
+  if (!*file)
+    {
+      /* fprintf (stderr, "%s: no suitable images in imageDirectory\n",
+               progname); */
+      goto FAIL;
+    }
+
   fp = fopen (file, "r");
   if (! fp)
     {
       fprintf (stderr, "%s: unable to read %s\n", progname, file);
-      return;
+      goto FAIL;
     }
 
   if (fstat (fileno (fp), &stat))
     {
       fprintf (stderr, "%s: %s: stat failed\n", progname, file);
-      return;
+      goto FAIL;
     }
 
   if (st->image_data) free (st->image_data);
@@ -257,9 +266,16 @@ xscreensaver_getimage_file_cb (XtPointer closure, int *source, XtInputId *id)
 
   fclose (fp);
 
-  /* fprintf (stderr, "loaded %s (%lu)\n", file, st->image_size); */
-
   st->start_time = time((time_t *) 0);
+  error_count = 0;
+  return;
+
+ FAIL:
+  if (++error_count > 10)
+    {
+      fprintf (stderr, "%s: too many errors loading images\n", progname);
+      exit (1);
+    }
 }
 
 
@@ -285,6 +301,14 @@ glitchpeg_init (Display *dpy, Window window)
   if (st->count < 1) st->count = 1;
 
   XClearWindow (st->dpy, st->window);
+
+# if 0  /* This check doesn't work, because X11 resources are the devil. */
+  if (! get_boolean_resource (dpy, "chooseRandomImages", "Boolean"))
+    {
+      fprintf (stderr, "%s: chooseRandomImages must be True", progname);
+      exit (1);
+    }
+# endif
 
   return st;
 }
@@ -315,6 +339,7 @@ glitchpeg_draw (Display *dpy, Window window, void *closure)
       unsigned char *glitched = malloc (st->image_size);
       int nn = random() % st->count;
       if (nn <= 0) nn = 1;
+      if (! (random() % 30)) nn *= 20;
 
       memcpy (glitched, st->image_data, st->image_size);
 

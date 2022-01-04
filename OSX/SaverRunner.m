@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2018 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2006-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -35,7 +35,7 @@
 #import "XScreenSaverGLView.h"
 #import "yarandom.h"
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 
 # ifndef __IPHONE_8_0
 #  define UIInterfaceOrientationUnknown UIDeviceOrientationUnknown
@@ -67,11 +67,15 @@
   return self;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (BOOL)shouldAutorotateToInterfaceOrientation: (UIInterfaceOrientation)o
 {
   return allowRotation;				/* Deprecated in iOS 6 */
 }
+#pragma clang diagnostic pop
 
+# ifndef HAVE_TVOS
 - (BOOL)shouldAutorotate			/* Added in iOS 6 */
 {
   return allowRotation;
@@ -81,13 +85,12 @@
 {
   return UIInterfaceOrientationMaskAll;
 }
+# endif // !HAVE_TVOS
 
 @end
 
 
 @implementation SaverViewController
-
-@synthesize saverName;
 
 - (id)initWithSaverRunner:(SaverRunner *)parent
              showAboutBox:(BOOL)showAboutBox
@@ -95,7 +98,6 @@
   self = [super init];
   if (self) {
     _parent = parent;
-    // _storedOrientation = UIInterfaceOrientationUnknown;
     _showAboutBox = showAboutBox;
 
     self.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
@@ -107,15 +109,18 @@
   return self;
 }
 
+# ifndef HAVE_TVOS
 - (BOOL) prefersStatusBarHidden
 {
   // Requires UIViewControllerBasedStatusBarAppearance = true in plist
   return YES;
 }
+# endif // !HAVE_TVOS
+
 
 - (void)dealloc
 {
-  [_saverName release];
+  [_saver_title release];
   // iOS: When a UIView deallocs, it doesn't do [UIView removeFromSuperView]
   // for its subviews, so the subviews end up with a dangling pointer in their
   // superview properties.
@@ -141,15 +146,14 @@
 }
 
 
+# ifndef HAVE_TVOS
 - (void)aboutPanel:(UIView *)saverView
        orientation:(UIInterfaceOrientation)orient
 {
   if (!_showAboutBox)
     return;
 
-  NSString *name = _saverName;
-  NSString *year = [_parent makeDesc:_saverName yearOnly:YES];
-
+  NSString *year = [_parent makeDesc:_saver_title yearOnly:YES];
 
   CGRect frame = [saverView frame];
   CGFloat rot;
@@ -161,13 +165,13 @@
 # ifdef __IPHONE_7_0
   CGSize s = CGSizeMake(frame.size.width, frame.size.height);
   CGSize tsize1 = [[[NSAttributedString alloc]
-                     initWithString: name
+                     initWithString:_saver_title
                      attributes:@{ NSFontAttributeName: font1 }]
                     boundingRectWithSize: s
                     options: NSStringDrawingUsesLineFragmentOrigin
                     context: nil].size;
   CGSize tsize2 = [[[NSAttributedString alloc]
-                     initWithString: name
+                     initWithString:_saver_title
                      attributes:@{ NSFontAttributeName: font2 }]
                     boundingRectWithSize: s
                     options: NSStringDrawingUsesLineFragmentOrigin
@@ -257,7 +261,7 @@
       frame.origin.y = (j == 0 ? 0 : pt1);
       textview = [[UITextView alloc] initWithFrame:frame];
       textview.font = (j == 0 ? font1 : font2);
-      textview.text = (j == 0 ? name  : year);
+      textview.text = (j == 0 ? _saver_title : year);
       textview.textAlignment = NSTextAlignmentCenter;
       textview.showsHorizontalScrollIndicator = NO;
       textview.showsVerticalScrollIndicator   = NO;
@@ -301,6 +305,7 @@
              userInfo:nil
              repeats:NO];
 }
+# endif // !HAVE_TVOS
 
 
 - (void)aboutOff
@@ -343,23 +348,17 @@
     [_saverView release];
   }
 
-# if 0
-  if (_storedOrientation != UIInterfaceOrientationUnknown) {
-    [[UIApplication sharedApplication]
-     setStatusBarOrientation:_storedOrientation
-     animated:NO];
-  }
-# endif
-
-  _saverView = [_parent newSaverView:_saverName
-                            withSize:parentView.bounds.size];
+  _saverView = [_parent newSaverView: _saver_title
+                            withSize: parentView.bounds.size];
 
   if (! _saverView) {
     UIAlertController *c = [UIAlertController
-                             alertControllerWithTitle:@"Unable to load!"
+                             alertControllerWithTitle:
+                               NSLocalizedString(@"Unable to load!", @"")
                              message:@""
                              preferredStyle:UIAlertControllerStyleAlert];
-    [c addAction: [UIAlertAction actionWithTitle: @"Bummer"
+    [c addAction: [UIAlertAction actionWithTitle:
+                                   NSLocalizedString(@"Bummer", @"")
                                  style: UIAlertActionStyleDefault
                                  handler: ^(UIAlertAction *a) {
       // #### Should expose the SaverListController...
@@ -379,8 +378,10 @@
   // heirarchy.
   [_saverView becomeFirstResponder]; // For shakes on iOS 6.
   [_saverView startAnimation];
+# ifndef HAVE_TVOS
   [self aboutPanel:_saverView
-       orientation:/* _storedOrientation */ UIInterfaceOrientationPortrait];
+       orientation: UIInterfaceOrientationPortrait];
+# endif // !HAVE_TVOS
 }
 
 
@@ -391,10 +392,15 @@
 }
 
 
+# ifndef HAVE_TVOS
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (BOOL)shouldAutorotateToInterfaceOrientation: (UIInterfaceOrientation)o
 {
   return NO;					/* Deprecated in iOS 6 */
 }
+#pragma clang diagnostic pop
 
 
 - (BOOL)shouldAutorotate			/* Added in iOS 6 */
@@ -422,17 +428,26 @@
 }
 */
 
+# endif // !HAVE_TVOS
 
-- (void)setSaverName:(NSString *)name
+
+- (void)setSaverTitle:(NSString *)title
 {
-  [name retain];
-  [_saverName release];
-  _saverName = name;
-  // _storedOrientation =
-  //   [UIApplication sharedApplication].statusBarOrientation;
-
+  [title retain];
+  [_saver_title release];
+  _saver_title = title;
   if (_saverView)
     [self createSaverView];
+}
+
+
+- (void)setSaver_title:(NSString *)title
+{
+  [self setSaverTitle: title];
+}
+- (void)setSaver_Title:(NSString *)title
+{
+  abort();
 }
 
 
@@ -454,37 +469,59 @@
 
   [self aboutOff:TRUE];  // It does goofy things if we rotate while it's up
 
+# if 1
+  NSLog(@"## orient");
+  [CATransaction commit];
+  [_saverView orientationChanged];
+  return;
+# endif
+
+  BOOL queued =
   [coordinator animateAlongsideTransition:^
                (id <UIViewControllerTransitionCoordinatorContext> context) {
     // This executes repeatedly during the rotation.
+NSLog(@"## animate %@", context);
   } completion:^(id <UIViewControllerTransitionCoordinatorContext> context) {
+NSLog(@"## completion %@", context);
     // This executes once when the rotation has finished.
     [CATransaction commit];
     [_saverView orientationChanged];
   }];
   // No code goes here, as it would execute before the above completes.
+
+  NSLog(@"## queued = %d", queued);
+
 }
+
+/* Not called
+- (void)willTransitionToTraitCollection:(UITraitCollection *)collection
+              withTransitionCoordinator:
+                (id<UIViewControllerTransitionCoordinator>)coordinator
+{
+  NSLog(@"#### %@ %@", collection, coordinator);
+}
+*/
 
 @end
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 @implementation SaverRunner
 
-
-- (XScreenSaverView *) newSaverView: (NSString *) module
-                           withSize: (NSSize) size
+- (ScreenSaverView *) newSaverView: (NSString *) title
+                          withSize: (NSSize) size
 {
   Class new_class = 0;
 
-# ifndef USE_IPHONE
+  NSString *classname = [saverNames objectForKey: title];
+
+# ifndef HAVE_IPHONE
 
   // Load the XScreenSaverView subclass and code from a ".saver" bundle.
 
-  NSString *name = [module stringByAppendingPathExtension:@"saver"];
-  NSString *path = [saverDir stringByAppendingPathComponent:name];
-
+  NSString *path = [[saverDir stringByAppendingPathComponent:classname]
+                     stringByAppendingPathExtension:@"saver"];
   if (! [[NSFileManager defaultManager] fileExistsAtPath:path]) {
     NSLog(@"bundle \"%@\" does not exist", path);
     return 0;
@@ -502,17 +539,15 @@
   // if (obundle && obundle != saverBundle)
   //  [obundle unload];
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   // Determine whether to create an X11 view or an OpenGL view by
   // looking for the "gl" tag in the xml file.  This is kind of awful.
 
+  NSString *file = [classname lowercaseString];
   NSString *path = [saverDir
                      stringByAppendingPathComponent:
-                       [[[module lowercaseString]
-                          stringByReplacingOccurrencesOfString:@" "
-                          withString:@""]
-                         stringByAppendingPathExtension:@"xml"]];
+                       [file stringByAppendingPathExtension:@"xml"]];
   NSData *xmld = [NSData dataWithContentsOfFile:path];
   NSAssert (xmld, @"no XML: %@", path);
   NSString *xml = [XScreenSaverView decompressXML:xmld];
@@ -522,7 +557,7 @@
                ? [XScreenSaverGLView class]
                : [XScreenSaverView class]);
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   if (! new_class)
     return 0;
@@ -532,13 +567,23 @@
   rect.size.width  = size.width;
   rect.size.height = size.height;
 
-  XScreenSaverView *instance =
-    [(XScreenSaverView *) [new_class alloc]
-                          initWithFrame:rect
-                          saverName:module
-                          isPreview:YES];
+  NSObject *instance = [new_class alloc];
+  if ([instance respondsToSelector:
+                  @selector(initWithFrame:title:isPreview:)])
+    // If it's one of ours, also pass the title.
+    instance = [(XScreenSaverView *) instance
+                   initWithFrame: rect
+                           title: title
+                       isPreview: YES];
+  else if ([instance respondsToSelector: @selector(initWithFrame:isPreview:)])
+    instance = [(ScreenSaverView *) instance
+                   initWithFrame: rect
+                       isPreview: YES];
+  else
+    instance = 0;
+
   if (! instance) {
-    NSLog(@"Failed to instantiate %@ for \"%@\"", new_class, module);
+    NSLog(@"Failed to instantiate %@ for \"%@\"", new_class, saver_title);
     return 0;
   }
 
@@ -548,17 +593,17 @@
      This is kind of horrible but I haven't thought of a more sensible
      way to make this work.
    */
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   if ([saverNames count] == 1) {
     setenv ("XSCREENSAVER_STANDALONE", "1", 1);
   }
 # endif
 
-  return (XScreenSaverView *) instance;
+  return (ScreenSaverView *) instance;
 }
 
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 
 static ScreenSaverView *
 find_saverView_child (NSView *v)
@@ -635,6 +680,7 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   NSAssert (sv, @"no saver view");
   if (!sv) return;
   NSWindow *prefs = [sv configureSheet];
+  NSAssert (prefs, @"no configureSheet in %@", sv);
 
   [NSApp beginSheet:prefs
      modalForWindow:[sv window]
@@ -662,7 +708,7 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   [NSApp stopModalWithCode:returnCode];
 }
 
-#else  // USE_IPHONE
+#else  // HAVE_IPHONE
 
 
 - (UIImage *) screenshot
@@ -682,6 +728,7 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   // iOS 8: Needs to be UIInterfaceOrientationPortrait.
   // (interfaceOrientation deprecated in iOS 8)
 
+# ifndef HAVE_TVOS
   UIInterfaceOrientation orient = UIInterfaceOrientationPortrait;
   /* iOS 8 broke -[UIScreen bounds]. */
 
@@ -692,6 +739,7 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
     size.width = size.height;
     size.height = s;
   }
+# endif // !HAVE_TVOS
 
 
   // Create a graphics context with the target size
@@ -704,6 +752,7 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   CGContextRef ctx = UIGraphicsGetCurrentContext();
 
 
+# ifndef HAVE_TVOS
   // Rotate the graphics context to match current hardware rotation.
   //
   switch (orient) {
@@ -729,6 +778,8 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   default:
     break;
   }
+# endif // !HAVE_TVOS
+
 
   // Iterate over every window from back to front
   //
@@ -769,8 +820,8 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
 
 - (void) openPreferences: (NSString *) saver
 {
-  XScreenSaverView *saverView = [self newSaverView:saver
-                                          withSize:CGSizeMake(0, 0)];
+  ScreenSaverView *saverView = [self newSaverView:saver
+                                         withSize:CGSizeMake(0, 0)];
   if (! saverView) return;
 
   NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
@@ -782,15 +833,15 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
 }
 
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 
-- (void)loadSaver:(NSString *)name
+- (void)loadSaver:(NSString *)title
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
-  if (saverName && [saverName isEqualToString: name]) {
+  if (saver_title && [saver_title isEqualToString: title]) {
     for (NSWindow *win in windows) {
       ScreenSaverView *sv = find_saverView ([win contentView]);
       if (![sv isAnimating])
@@ -799,14 +850,16 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
     return;
   }
 
-  saverName = name;
+  [title retain];
+  [saver_title release];
+  saver_title = title;
 
   for (NSWindow *win in windows) {
     NSView *cv = [win contentView];
     NSString *old_title = [win title];
     if (!old_title) old_title = @"XScreenSaver";
-    [win setTitle: name];
-    relabel_menus (menubar, old_title, name);
+    [win setTitle: title];
+    relabel_menus (menubar, old_title, title);
 
     ScreenSaverView *old_view = find_saverView (cv);
     NSView *sup = old_view ? [old_view superview] : cv;
@@ -817,8 +870,8 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
       [old_view removeFromSuperview];
     }
 
-    NSSize size = [cv frame].size;
-    ScreenSaverView *new_view = [self newSaverView:name withSize: size];
+    NSSize size = [sup frame].size;
+    ScreenSaverView *new_view = [self newSaverView: title withSize: size];
     NSAssert (new_view, @"unable to make a saver view");
 
     [new_view setFrame: (old_view ? [old_view frame] : [cv frame])];
@@ -833,18 +886,34 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
     [NSUserDefaultsController sharedUserDefaultsController];
   [ctl save:self];
 
-# else  // USE_IPHONE
+#  if 0
+  // Dump the entire resource database.
+  NSBundle *nsb = [NSBundle bundleForClass:[self class]];
+  NSLog(@"SaverRunner userDefaults for %@", [nsb bundleIdentifier]);
+  NSDictionary *d = [[ctl defaults] dictionaryRepresentation];
+  for (NSObject *key in [[d allKeys]
+                          sortedArrayUsingSelector:@selector(compare:)]) {
+    NSObject *val = [d objectForKey:key];
+    NSLog (@"%@ = %@", key, val);
+  }
+#  endif
+
+# else  // HAVE_IPHONE
+
+  [title retain];
+  [saver_title release];
+  saver_title = title;
 
 #  if !defined __OPTIMIZE__ || TARGET_IPHONE_SIMULATOR
-  NSLog (@"selecting saver \"%@\"", name);
+  NSLog (@"selecting saver \"%@\"", saver_title);
 #  endif
 
   NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
-  [prefs setObject:name forKey:@"selectedSaverName"];
+  [prefs setObject:saver_title forKey:@"selectedSaverName"];
   [prefs synchronize];
 
 /* Cacheing this screws up rotation when starting a saver twice in a row.
-  if (saverName && [saverName isEqualToString: name]) {
+  if (saver_title && [saver_title isEqualToString: title]) {
     if ([saverView isAnimating])
       return;
     else
@@ -852,10 +921,12 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   }
 */
 
-  saverName = name;
+  [title retain];
+  [saver_title release];
+  saver_title = title;
 
   if (nonrotating_controller) {
-    nonrotating_controller.saverName = name;
+    nonrotating_controller.saver_title = saver_title;
     return;
   }
 
@@ -939,7 +1010,11 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   nonrotating_controller = [[SaverViewController alloc]
                             initWithSaverRunner:self
                             showAboutBox:[saverNames count] != 1];
-  nonrotating_controller.saverName = name;
+  nonrotating_controller.saver_title = title;
+
+  // Necessary to prevent "card"-like presentation on Xcode 11 with iOS 13:
+  nonrotating_controller.modalPresentationStyle =
+    UIModalPresentationFullScreen;
 
   /* LAUNCH: */
 
@@ -949,11 +1024,11 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   // even though [XScreenSaverView stopAndClose] does setHidden:NO first.
   // [window setHidden:YES];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 
 - (void)aboutPanel:(id)sender
 {
@@ -975,29 +1050,29 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
     orderFrontStandardAboutPanelWithOptions:d];
 }
 
-#endif // !USE_IPHONE
+#endif // !HAVE_IPHONE
 
 
 
 - (void)selectedSaverDidChange:(NSDictionary *)change
 {
   NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
-  NSString *name = [prefs stringForKey:@"selectedSaverName"];
+  NSString *title = [prefs stringForKey:@"selectedSaverName"];
 
-  if (! name) return;
+  if (! title) return;
 
-  if (! [saverNames containsObject:name]) {
-    NSLog (@"saver \"%@\" does not exist", name);
+  if (! [saverNames objectForKey:title]) {
+    NSLog (@"saver \"%@\" does not exist", title);
     return;
   }
 
-  [self loadSaver: name];
+  [self loadSaver: title];
 }
 
 
-- (NSArray *) listSaverBundleNamesInDir:(NSString *)dir
+- (NSDictionary *) listSaverBundleNamesInDir:(NSString *)dir
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   NSString *ext = @"saver";
 # else
   NSString *ext = @"xml";
@@ -1006,49 +1081,52 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   NSArray *files = [[NSFileManager defaultManager]
                      contentsOfDirectoryAtPath:dir error:nil];
   if (! files) return 0;
-  NSMutableArray *result = [NSMutableArray arrayWithCapacity: [files count]+1];
+  NSMutableDictionary *result =
+    [NSMutableDictionary dictionaryWithCapacity:[files count]+1];
 
   for (NSString *p in files) {
-    if ([[p pathExtension] caseInsensitiveCompare: ext]) 
+    if ([[p pathExtension] caseInsensitiveCompare: ext])
       continue;
 
-    NSString *name = [[p lastPathComponent] stringByDeletingPathExtension];
-
-# ifdef USE_IPHONE
-    // Get the saver name's capitalization right by reading the XML file.
-
     p = [dir stringByAppendingPathComponent: p];
+
+    NSString *classname = [[p lastPathComponent] stringByDeletingPathExtension];
+    NSString *title = classname;
+
+    // Get the title's capitalization right by reading the XML file.
+
+# ifdef HAVE_IPHONE
     NSData *xmld = [NSData dataWithContentsOfFile:p];
     NSAssert (xmld, @"no XML: %@", p);
     NSString *xml = [XScreenSaverView decompressXML:xmld];
+
     NSRange r = [xml rangeOfString:@"_label=\"" options:0];
     NSAssert1 (r.length, @"no name in %@", p);
     if (r.length) {
       xml = [xml substringFromIndex: r.location + r.length];
       r = [xml rangeOfString:@"\"" options:0];
-      if (r.length) name = [xml substringToIndex: r.location];
+      NSAssert1 (r.length, @"no name in %@", p);
+      if (r.length)
+        title = [xml substringToIndex: r.location];
     }
+# else  // !HAVE_IPHONE
+    NSBundle *nsb = [NSBundle bundleWithPath:p];
+    title = [[nsb infoDictionary] objectForKey:@"CFBundleName"];
+# endif // !HAVE_IPHONE
 
-# endif // USE_IPHONE
-
-    NSAssert1 (name, @"no name in %@", p);
-    if (name) [result addObject: name];
+    [result setObject:classname forKey:title];
   }
 
-  if (result && [result count])
-    return [result sortedArrayUsingSelector:
-                     @selector(localizedCaseInsensitiveCompare:)];
-  else
-    return 0;
+  return [result count] ? result : 0;
 }
 
 
 
-- (NSArray *) listSaverBundleNames
+- (void) listSaverBundleNames
 {
   NSMutableArray *dirs = [NSMutableArray arrayWithCapacity: 10];
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   // On MacOS, look in the "Contents/Resources/" and "Contents/PlugIns/"
   // directories in the bundle.
   [dirs addObject: [[[[NSBundle mainBundle] bundlePath]
@@ -1065,21 +1143,21 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
 //  [dirs addObject: @"/Library/Screen Savers"];
 //  [dirs addObject: @"/System/Library/Screen Savers"];
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   // On iOS, only look in the bundle's root directory.
   [dirs addObject: [[NSBundle mainBundle] bundlePath]];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   int i;
   for (i = 0; i < [dirs count]; i++) {
     NSString *dir = [dirs objectAtIndex:i];
-    NSArray *names = [self listSaverBundleNamesInDir:dir];
+    NSDictionary *names = [self listSaverBundleNamesInDir:dir];
     if (! names) continue;
     saverDir   = [dir retain];
     saverNames = [names retain];
-    return names;
+    return;
   }
 
   NSString *err = @"no .saver bundles found in: ";
@@ -1090,13 +1168,12 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
     err = [err stringByAppendingString:@"/"];
   }
   NSLog (@"%@", err);
-  return [NSArray array];
 }
 
 
 /* Create the popup menu of available saver names.
  */
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 
 - (NSPopUpButton *) makeMenu
 {
@@ -1106,12 +1183,13 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   rect.size.height = 10;
   NSPopUpButton *popup = [[NSPopUpButton alloc] initWithFrame:rect
                                                     pullsDown:NO];
-  int i;
   float max_width = 0;
-  for (i = 0; i < [saverNames count]; i++) {
-    NSString *name = [saverNames objectAtIndex:i];
-    [popup addItemWithTitle:name];
-    [[popup itemWithTitle:name] setRepresentedObject:name];
+  NSArray *titles = [[saverNames allKeys]
+                        sortedArrayUsingSelector:
+                       @selector(localizedCaseInsensitiveCompare:)];
+  for (NSString *title in titles) {
+    [popup addItemWithTitle: title];
+    [[popup itemWithTitle: title] setRepresentedObject: title];
     [popup sizeToFit];
     NSRect r = [popup frame];
     if (r.size.width > max_width) max_width = r.size.width;
@@ -1140,26 +1218,23 @@ relabel_menus (NSObject *v, NSString *old_str, NSString *new_str)
   return popup;
 }
 
-#else  // USE_IPHONE
+#else  // HAVE_IPHONE
 
-- (NSString *) makeDesc:(NSString *)saver
-                  yearOnly:(BOOL) yearp
+- (NSString *) makeDesc:(NSString *) title
+               yearOnly:(BOOL) yearp
 {
   NSString *desc = 0;
-  NSString *path = [saverDir stringByAppendingPathComponent:
-                               [[saver lowercaseString]
-                                 stringByReplacingOccurrencesOfString:@" "
-                                 withString:@""]];
-  NSRange r;
-
-  path = [path stringByAppendingPathExtension:@"xml"];
+  NSString *classname = [saverNames objectForKey: title];
+  NSString *file = [classname lowercaseString];
+  NSString *path = [[saverDir stringByAppendingPathComponent: file]
+                     stringByAppendingPathExtension:@"xml"];
   NSData *xmld = [NSData dataWithContentsOfFile:path];
   if (! xmld) goto FAIL;
   desc = [XScreenSaverView decompressXML:xmld];
   if (! desc) goto FAIL;
 
-  r = [desc rangeOfString:@"<_description>"
-            options:NSCaseInsensitiveSearch];
+  NSRange r = [desc rangeOfString:@"<_description>"
+                          options:NSCaseInsensitiveSearch];
   if (r.length == 0) {
     desc = 0;
     goto FAIL;
@@ -1238,35 +1313,27 @@ FAIL:
 {
   NSMutableDictionary *dict = 
     [NSMutableDictionary dictionaryWithCapacity:[saverNames count]];
-  for (NSString *saver in saverNames) {
-    [dict setObject:[self makeDesc:saver] forKey:saver];
+  for (NSString *title in [saverNames allKeys]) {
+    [dict setObject:[self makeDesc:title] forKey:title];
   }
   return dict;
 }
 
 
+// Called from iOS XScreenSaverView when the "Stop" or "Settings"
+// buttons are pressed.
+//
 - (void) wantsFadeOut:(XScreenSaverView *)sender
 {
   rotating_nav.view.hidden = NO; // In case it was hidden during startup.
 
-  /* The XScreenSaverView screws with the status bar orientation, mostly to
-     keep the simulator oriented properly. But on iOS 8.1 (and maybe 8.0
-     and/or 8.2), this confuses the UINavigationController, so put the
-     orientation back to portrait before dismissing the SaverViewController.
-   */
-# if 0
-  [[UIApplication sharedApplication]
-   setStatusBarOrientation:UIInterfaceOrientationPortrait
-   animated:NO];
-# endif
-
   /* Make sure the most-recently-run saver is visible.  Sometimes it ends
      up scrolled half a line off the bottom of the screen.
    */
-  if (saverName) {
+  if (saver_title) {
     for (UIViewController *v in [rotating_nav viewControllers]) {
       if ([v isKindOfClass:[SaverListController class]]) {
-        [(SaverListController *)v scrollTo: saverName];
+        [(SaverListController *)v scrollTo: saver_title];
         break;
       }
     }
@@ -1280,6 +1347,8 @@ FAIL:
 }
 
 
+// Called from iOS XScreenSaverView when the cycle timer fires.
+//
 - (void) didShake:(XScreenSaverView *)sender
 {
 # if TARGET_IPHONE_SIMULATOR
@@ -1290,7 +1359,7 @@ FAIL:
 }
 
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 
@@ -1314,7 +1383,7 @@ FAIL:
 }
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
 /* Create the desktop window shell, possibly including a preferences button.
  */
@@ -1343,7 +1412,7 @@ FAIL:
     rect.origin.y = 0;
     rect.size.width = rect.size.height = 10;
     pb = [[NSButton alloc] initWithFrame:rect];
-    [pb setTitle:@"Preferences"];
+    [pb setTitle:NSLocalizedString(@"Preferences", @"")];
     [pb setBezelStyle:NSRoundedBezelStyle];
     [pb sizeToFit];
 
@@ -1436,26 +1505,27 @@ FAIL:
 {
   for (NSWindow *win in windows) {
     ScreenSaverView *sv = find_saverView ([win contentView]);
-    if ([sv isAnimating])
+    BOOL is = [sv isAnimating];
+    if (is)
       [sv animateOneFrame];
   }
 }
 
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
 
 - (void)applicationDidFinishLaunching:
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
     (NSNotification *) notif
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
     (UIApplication *) application
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 {
   [self listSaverBundleNames];
 
   NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   int window_count = ([saverNames count] <= 1 ? 1 : 2);
   NSMutableArray *a = [[NSMutableArray arrayWithCapacity: window_count+1]
                         retain];
@@ -1469,7 +1539,7 @@ FAIL:
     [win setDelegate:self];
     // Get the last-saved window position out of preferences.
     [win setFrameAutosaveName:
-              [NSString stringWithFormat:@"XScreenSaverWindow%d", i]];
+           [NSString stringWithFormat:@"XScreenSaverWindow%d", i]];
     [win setFrameUsingName:[win frameAutosaveName]];
     [a addObject: win];
     // This prevents clicks from being seen by savers.
@@ -1477,12 +1547,13 @@ FAIL:
     win.releasedWhenClosed = NO;
     [win release];
   }
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
 # undef ya_rand_init
   ya_rand_init (0);	// Now's a good time.
 
 
+# ifndef HAVE_TVOS
   /* iOS docs say:
      "You must call this method before attempting to get orientation data from
       the receiver. This method enables the device's accelerometer hardware
@@ -1491,6 +1562,7 @@ FAIL:
      Adding or removing this doesn't seem to make any difference. It's
      probably getting called by the UINavigationController. Still... */
   [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
+# endif // !HAVE_TVOS
 
   rotating_nav = [[[RotateyViewController alloc] initWithRotation:YES]
                          retain];
@@ -1505,16 +1577,18 @@ FAIL:
              UIViewAutoresizingFlexibleHeight)];
 
   SaverListController *menu = [[SaverListController alloc] 
-                                initWithNames:saverNames
+                                initWithNames:[saverNames allKeys]
                                 descriptions:[self makeDescTable]];
   [rotating_nav pushViewController:menu animated:YES];
   [menu becomeFirstResponder];
   [menu autorelease];
 
+# ifndef HAVE_TVOS
   application.applicationSupportsShakeToEdit = YES;
+# endif // !HAVE_TVOS
 
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   NSString *forced = 0;
   /* In the XCode project, each .saver scheme sets this env var when
@@ -1524,39 +1598,54 @@ FAIL:
      whatever it was last time.
    */
   const char *f = getenv ("SELECTED_SAVER");
-  if (f && *f)
-    forced = [NSString stringWithCString:(char *)f
-                       encoding:NSUTF8StringEncoding];
-
-  if (forced && ![saverNames containsObject:forced]) {
-    NSLog(@"forced saver \"%@\" does not exist", forced);
-    forced = 0;
+  if (f && *f) {
+    NSString *ff = [NSString stringWithCString:(char *)f
+                                      encoding:NSUTF8StringEncoding];
+    for (NSString *title in [saverNames allKeys]) {
+      if ([ff isEqualToString: [saverNames objectForKey:title]]) {
+        forced = title;
+        break;
+      }
+    }
+    if (!forced)
+      NSLog(@"forced saver \"%@\" does not exist", ff);
   }
 
   // If there's only one saver, run that.
   if (!forced && [saverNames count] == 1)
-    forced = [saverNames objectAtIndex:0];
+    forced = [[saverNames allValues] objectAtIndex:0];
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   NSString *prev = [prefs stringForKey:@"selectedSaverName"];
 
   if (forced)
     prev = forced;
 
+  if (prev && ! [saverNames objectForKey:prev]) {
+    NSLog (@"prev saver \"%@\" does not exist", prev);
+    prev = forced = 0;
+    [prefs removeObjectForKey:@"selectedSaverName"];
+    [prefs removeObjectForKey:@"wasRunning"];
+    rotating_nav.view.hidden = NO;
+  }
+
   // If nothing was selected (e.g., this is the first launch)
   // then scroll randomly instead of starting up at "A".
   //
-  if (!prev)
-    prev = [saverNames objectAtIndex: (random() % [saverNames count])];
+  if (!prev) {
+    NSArray *titles = [saverNames allKeys];
+    prev = [titles objectAtIndex: (random() % [titles count])];
+    [prefs removeObjectForKey:@"wasRunning"];
+  }
 
   if (prev)
     [menu scrollTo: prev];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   if (forced)
     [prefs setObject:forced forKey:@"selectedSaverName"];
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   /* Don't auto-launch the saver unless it was running last time.
      XScreenSaverView manages this, on crash_timer.
      Unless forced.
@@ -1574,7 +1663,7 @@ FAIL:
 
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   /* On 10.8 and earlier, [ScreenSaverView startAnimation] causes the
      ScreenSaverView to run its own timer calling animateOneFrame.
      On 10.9, that fails because the private class ScreenSaverModule
@@ -1598,11 +1687,11 @@ FAIL:
                             repeats:YES];
     }
   }
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 }
 
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 
 /* When the window closes, exit (even if prefs still open.)
  */
@@ -1623,7 +1712,7 @@ FAIL:
     [sv stopAnimation];
 }
 
-# else // USE_IPHONE
+# else // HAVE_IPHONE
 
 - (void)applicationWillResignActive:(UIApplication *)app
 {
@@ -1640,7 +1729,7 @@ FAIL:
   [(XScreenSaverView *)view setScreenLocked:YES];
 }
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 @end

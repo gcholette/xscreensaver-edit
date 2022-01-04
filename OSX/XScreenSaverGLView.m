@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2017 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2006-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -22,7 +22,7 @@
 #import "screenhackI.h"
 #import "xlockmoreI.h"
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 # include "jwzgles.h"
 # import <OpenGLES/ES1/glext.h>
 #else
@@ -43,16 +43,18 @@ extern void check_gl_error (const char *type);
 
 /* With GL programs, drawing at full resolution isn't a problem.
  */
-- (CGFloat) hackedContentScaleFactor
+- (CGFloat) hackedContentScaleFactor:(BOOL)fonts_p
 {
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   return [self contentScaleFactor];
 # else
+  NSAssert (self.window, @"no window in view");
+  if (! self.window) abort();
   return self.window.backingScaleFactor;
 # endif
 }
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 
 - (BOOL)ignoreRotation
 {
@@ -78,18 +80,18 @@ extern void check_gl_error (const char *type);
   glBindRenderbufferOES (GL_RENDERBUFFER_OES, gl_renderbuffer);
   [ogl_ctx presentRenderbuffer:GL_RENDERBUFFER_OES];
 }
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 - (void) animateOneFrame
 {
-# if defined USE_IPHONE && defined JWXYZ_QUARTZ
+# if defined HAVE_IPHONE && defined JWXYZ_QUARTZ
   UIGraphicsPushContext (backbuffer);
 # endif
 
   [self render_x11];
 
-# if defined USE_IPHONE && defined JWXYZ_QUARTZ
+# if defined HAVE_IPHONE && defined JWXYZ_QUARTZ
   UIGraphicsPopContext();
 # endif
 }
@@ -107,7 +109,7 @@ extern void check_gl_error (const char *type);
 }
 
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 
 /* Keep the GL scene oriented into a portrait-mode View, regardless of
    what the physical device orientation is.
@@ -133,7 +135,7 @@ extern void check_gl_error (const char *type);
                             "SuppressRotationAnimation");
 }
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 
@@ -175,7 +177,7 @@ extern void check_gl_error (const char *type);
 }
 
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 
 - (NSOpenGLPixelFormat *) getGLPixelFormat
 {
@@ -198,6 +200,19 @@ extern void check_gl_error (const char *type);
      predictable.  Without changing the code, some times a given saver will
      perform fine with multisampling on, and other times it will perform
      very badly.  Without multisampling, they always perform fine.
+
+     Update, 2021: In this modern world of Retina screens, I don't think
+     there's any point in trying to get multisampling to work.  Modern systems
+     all have retina / hiDPI screens, meaning that a logical pixel is already
+     2 or 3.5 physical pixels, and the whole point of having displays like
+     that is that software antialiasing isn't necessary any more because the
+     individual pixels are small enough that human eyes can't see them as
+     rectangles.  If you already have 0.16mm pixels, having 0.08mm "virtual"
+     pixels is not perceptible.
+
+     So multisample only makes sense on non-retina displays -- and those are
+     the *old* video cards and GPUs, that are most likely to be resource
+     limited and most likely to screw up in unpredictable ways!
    */
   //  if (ms_p && [[view window] screen] != [[NSScreen screens] objectAtIndex:0])
   //    ms_p = 0;
@@ -209,7 +224,11 @@ extern void check_gl_error (const char *type);
     // attrs[i++] = NSOpenGLPFANoRecovery;
   }
 
+# pragma clang diagnostic push   // "NSOpenGLPFAWindow deprecated in 10.9"
+# pragma clang diagnostic ignored "-Wdeprecated"
   attrs[i++] = NSOpenGLPFAWindow;
+# pragma clang diagnostic pop
+
 # ifdef JWXYZ_GL
   attrs[i++] = NSOpenGLPFAPixelBuffer;
 # endif
@@ -228,7 +247,7 @@ extern void check_gl_error (const char *type);
   return [result autorelease];
 }
 
-#else // !USE_IPHONE
+#else // !HAVE_IPHONE
 
 - (NSDictionary *)getGLProperties
 {
@@ -277,7 +296,7 @@ extern void check_gl_error (const char *type);
 - (void) stopAnimation
 {
   [super stopAnimation];
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
   if (_glesState) {
     [EAGLContext setCurrentContext:ogl_ctx];
     jwzgles_make_current (_glesState);
@@ -292,7 +311,7 @@ extern void check_gl_error (const char *type);
   jwzgles_make_current (_glesState);
 }
 
-#endif // !USE_IPHONE
+#endif // !HAVE_IPHONE
 
 
 - (void)dealloc {
@@ -330,10 +349,12 @@ extern void check_gl_error (const char *type);
 GLXContext *
 init_GL (ModeInfo *mi)
 {
+#if 0
   Window win = mi->window;
   XScreenSaverGLView *view = (XScreenSaverGLView *) jwxyz_window_view (win);
   NSAssert1 ([view isKindOfClass:[XScreenSaverGLView class]],
              @"wrong view class: %@", view);
+#endif
 
   // OpenGL initialization is in [XScreenSaverView startAnimation].
 
@@ -351,8 +372,8 @@ init_GL (ModeInfo *mi)
 
   // Caller expects a pointer to an opaque struct...  which it dereferences.
   // Don't ask me, it's historical...
-  static int blort = -1;
-  return (void *) &blort;
+  static GLXContext blort = (GLXContext) -1;
+  return &blort;
 }
 
 
@@ -367,14 +388,16 @@ glXSwapBuffers (Display *dpy, Window window)
 #endif // JWXYZ_GL
 
   XScreenSaverGLView *view = (XScreenSaverGLView *) jwxyz_window_view (window);
+#if 0
   NSAssert1 ([view isKindOfClass:[XScreenSaverGLView class]],
              @"wrong view class: %@", view);
-#ifndef USE_IPHONE
+#endif
+#ifndef HAVE_IPHONE
   NSOpenGLContext *ctx = [view oglContext];
   if (ctx) [ctx flushBuffer]; // despite name, this actually swaps
-#else /* USE_IPHONE */
+#else /* HAVE_IPHONE */
   [view swapBuffers];
-#endif /* USE_IPHONE */
+#endif /* HAVE_IPHONE */
 }
 
 /* Does nothing - prepareContext already did the work.

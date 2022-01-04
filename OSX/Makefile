@@ -1,4 +1,4 @@
-# XScreenSaver for MacOS X, Copyright (c) 2006-2015 by Jamie Zawinski.
+# XScreenSaver for MacOS X, Copyright © 2006-2021 Jamie Zawinski.
 
 XCODE_APP = /Applications/Xcode.app
 
@@ -12,11 +12,16 @@ XCODE_APP = /Applications/Xcode.app
 TARGETS    = All Savers
 #ARCH      = -arch i386 -arch x86_64 ONLY_ACTIVE_ARCH=NO
 CERT	   = 'Developer ID Installer: Jamie Zawinski (4627ATJELP)'
+CERT2	   = 'Developer ID Application: Jamie Zawinski (4627ATJELP)'
 PKGID	   = org.jwz.xscreensaver
 THUMBDIR   = build/screenshots
 XCODEBUILD = $(XCODE_APP)/Contents/Developer/usr/bin/xcodebuild
 SETFILE    = $(XCODE_APP)/Contents/Developer/Tools/SetFile
 SETICON    = ./seticon.pl
+
+# Using $(MAKE) directly means the shell executes things even with "make -n"
+MAKE2 = $(MAKE)
+
 
 default: release
 all: debug release
@@ -29,22 +34,30 @@ distclean:
 	-rm -f config.status config.cache config.log \
 	  *.bak *.rej TAGS *~ "#"*
 	-rm -rf autom4te*.cache
-	-rm -rf build Sparkle.framework
+	-rm -rf build
+#	-rm -rf Sparkle.framework
 
 distdepend:: Sparkle.framework
 distdepend:: update_plist_version
 
-debug: distdepend
+_debug: distdepend
 	$(XCODEBUILD) $(ARCH) -target "$(TARGETS)" -configuration Debug   build
 
-release:: distdepend
+_release:: distdepend
 	$(XCODEBUILD) $(ARCH) -target "$(TARGETS)" -configuration Release build
 
-release:: check_versions
+_release:: check_versions
+
+debug::
+	$(MAKE2) _debug > /dev/null
+
+release::
+	$(MAKE2) _release > /dev/null
+
 
 Sparkle.framework:
 	rm -rf bin sparkle-bin
-	tar -vxjf ../archive/Sparkle-1.21.2.tar.bz2 \
+	tar -vxjf ../archive/Sparkle-1.27.0.tar.xz \
 	  --exclude CHANGELOG \
 	  --exclude LICENSE \
 	  --exclude SampleAppcast.xml \
@@ -61,8 +74,19 @@ Sparkle.framework:
 
 BASE = xscreensaver/screenshots/
 URL = https://www.jwz.org/$(BASE)
-WGET = wget -q -U xscreensaver-build-osx --content-on-error=0
-CVT  = -thumbnail '200x150^' -gravity center -extent 200x150 \
+
+# I find wget easier to deal with, but curl is usually installed by default.
+#WGET = wget -q -U xscreensaver-build-osx --content-on-error=0 -O-
+WGET = curl -s -A xscreensaver-build-osx -f
+
+# Apple savers have "thumbnail.png" at 90x58 and "thumbnail@2x.png" at 180x116.
+# System Preferences stretches those to fill a bordered 170x105 frame.
+# These args take our source images (usually 200x150) and fits them into a
+# 180x116 box, cropping either horizontally or vertically as needed.
+# It also makes the alpha mask have rounded corners.
+#
+THUMB_SIZE=180x116
+CVT  = -thumbnail $(THUMB_SIZE)'^' -gravity center -extent $(THUMB_SIZE) \
      \( +clone  -alpha extract \
         -draw 'fill black polygon 0,0 0,6 6,0 fill white circle 6,6 6,0' \
         \( +clone -flip \) -compose Multiply -composite \
@@ -87,10 +111,10 @@ $(THUMBDIR)/%.png:
 	  cp -p "$$HOME/www/$(BASE)/$$FILE1" "$$TMP" ;			\
 	else								\
 	  echo "downloading $$URL..." ;					\
-	  $(WGET) -O"$$TMP" "$$URL" ;					\
+	  $(WGET) "$$URL" > "$$TMP" ;					\
 	  if [ ! -s "$$TMP" ]; then					\
 	    echo "downloading $$URL2..." ;				\
-	    $(WGET) -O"$$TMP" "$$URL2" ;				\
+	    $(WGET) "$$URL2" > "$$TMP" ;				\
 	  fi ;								\
 	  if [ ! -s "$$TMP" ]; then					\
 	    rm -f "$$TMP" ;						\
@@ -108,11 +132,29 @@ $(THUMBDIR)/%.png:
 	  rm -f "$$TMP" ;						\
 	fi
 
+$(THUMBDIR)/randomxscreensaver.png:
+	@\
+	SRC="iSaverRunner1024.png" ;					\
+	CVT2="-gravity center -background #249ff5 -extent 200%x100%" ;	\
+	FILE1=`echo "$@" | sed 's!^.*/\([^/]*\)\.png$$!\1.jpg!'` ;	\
+	FILE2="$@" ;							\
+	TMP="$$FILE2".tmp.png ;						\
+	if [ ! -d $(THUMBDIR) ]; then mkdir -p $(THUMBDIR) ; fi ;	\
+	rm -f "$$FILE2" "$$TMP" ;					\
+	set +e ;							\
+	convert "$$SRC" $$CVT2 "$$TMP" ;				\
+	convert "$$TMP" $(CVT) "$$FILE2" ;				\
+	if [ ! -s "$$FILE2" ]; then					\
+	  echo "$$FILE2 failed" >&2 ;					\
+	  rm -f "$$FILE2" "$$TMP" ;					\
+	  exit 1 ;							\
+	fi
+
 
 check_versions:
 	@\
   SRC=../utils/version.h ;						\
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' $$SRC` ;		\
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ]*\).*/\1/p' $$SRC | head -1` ;	\
   DIR=build/Release ;							\
   RESULT=0 ;								\
   for S in $$DIR/*.{saver,app} ; do					\
@@ -193,21 +235,23 @@ ios-function-table.m::
 	@./build-fntable.pl build/Debug-iphonesimulator/XScreenSaver.app $@
 
 
-echo_tarfiles:
-	@echo `( find .							\
+list_tarfiles:
+	@( find .							\
 	  \( \( -name '.??*' -o -name build -o -name CVS -o -name '*~*'	\
 	     -o -name 'jwz.*' -o -name 'Screen Savers'			\
              -o -name xscreensaver.xcodeproj \)				\
 	     -prune \)							\
 	  -o \( -type f -o -type l \) -print ;				\
-	  echo xscreensaver.xcodeproj/project.pbxproj )			\
+	  echo xscreensaver.xcodeproj/project.pbxproj ;			\
+	  find xscreensaver.xcodeproj/xcshareddata -type f ;		\
+	 )								\
 	| sed 's@^\./@@'						\
-	| sort`
+	| sort
 
 update_plist_version:
 	@								      \
   SRC=../utils/version.h ;						      \
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' $$SRC` ;		      \
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ]*\).*/\1/p' $$SRC | head -1` ;	      \
   T=/tmp/xs.$$$$ ;							      \
   for S in *.plist ; do							      \
     /bin/echo -n "Updating version number in $$S to \"$$V\"... " ;	      \
@@ -227,12 +271,12 @@ update_plist_version:
 
 updates.xml::
 	./updates.pl xscreensaver ../README ../archive ~/www/xscreensaver
-	@$(MAKE) test_sig
+	@$(MAKE2) test_sig
 
 test_sig::
 	@								    \
   U=../utils/version.h ;						    \
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ;]*\).*/\1/p' < $$U` ;		    \
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ;]*\).*/\1/p' < $$U | head -1` ;	    \
   BASE="xscreensaver-$$V" ;						    \
   OUTDIR="../archive" ;							    \
   DMG="$$OUTDIR/$$BASE.dmg" ;						    \
@@ -242,21 +286,36 @@ test_sig::
   SIGB=/tmp/$$NN.sig ;							    \
   HASH=/tmp/$$NN.hash ;							    \
   rm -f "$$SIGB" "$$HASH" ;						    \
+  if ( echo "$$SIG" | grep -qi ERROR ); then				    \
+    echo "No signature in updates.xml" >&2 ; exit 1 ;			    \
+  fi ;									    \
   echo "$$SIG " | base64 -D  > "$$SIGB" ;				    \
   set -e ;								    \
   for OPENSSL in /usr/bin/openssl /opt/local/bin/openssl ; do		    \
     $$OPENSSL dgst -sha1 -binary  < "$$DMG"  > "$$HASH" ;		    \
     /bin/echo -n "$$OPENSSL	`$$OPENSSL version`:	" ;		    \
-    $$OPENSSL dgst -dss1 -verify "$$PUB" -signature "$$SIGB" "$$HASH" ;	    \
+    $$OPENSSL dgst -sha1 -verify "$$PUB" -signature "$$SIGB" "$$HASH" ;	    \
   done ;								    \
   rm -f "$$SIGB" "$$HASH" ;						    \
 
+
+# As of Xcode 13, I think it's no longer possible to check signatures on the
+# saver bundles: they must be signed with "Developer ID Application" but as
+# the individual savers are not notarized, "spctl --assess --type install"
+# reports "rejected, Unnotarized Developer ID".
+#
+# Also, after running "productsign" on the pkg, "codesign" reports that it
+# is unsigned, so WTF?
+#
+# "codesign -vv --deep --strict" complains: "resource fork, Finder
+# information, or similar detritus not allowed".  Maybe it is complaining
+# about the "Icon\r" file?
 
 build/Release/installer.pkg: installer.rtf installer.xml installer.sh installer.png ../utils/version.h
 	@\
   set -e ;								\
   SRC=../utils/version.h ;						\
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' $$SRC` ;		\
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ]*\).*/\1/p' $$SRC | head -1` ;	\
 									\
   DIST="installer.xml" ;						\
   STAGE="build/Release/pkg_stage" ;					\
@@ -281,22 +340,24 @@ build/Release/installer.pkg: installer.rtf installer.xml installer.sh installer.
 	       --package-path "$$STAGE" --version "$$V" "$$PRODUCT" ;	\
 									\
   productsign --sign $(CERT) "$$PRODUCT" "$$FINAL" ;			\
-  spctl --assess --verbose=4 --type install "$$FINAL" ;			\
+									\
+  if false; then							\
+    spctl --assess --verbose=4 --type install "$$FINAL" ;		\
+  fi ;									\
 									\
   rm -rf "$$STAGE" ;							\
 
 
-# -format UDBZ saves 4% (~1.2 MB) over UDZO.
 dmg:: distdepend check_versions check_coretext
 #dmg:: check_gc
 dmg:: build/Release/installer.pkg
-dmg:: _dmg notarize
+dmg:: _dmg notarize staple updates.xml
 
 _dmg::
 	@								      \
   set -e ;								      \
   SRC=../utils/version.h ;						      \
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' $$SRC` ;		      \
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ]*\).*/\1/p' $$SRC | head -1` ;	      \
   TMPDIR="build" ;							      \
   SRC="build/Release" ;							      \
   EXTRAS=../../xdaliclock/OSX/build/Release/*.saver ;			      \
@@ -309,7 +370,7 @@ _dmg::
   DST="$$STAGE/Screen Savers" ;						      \
   PKG="$$STAGE/Install Everything.pkg" ;				      \
   rm -f "$$DMG" ;							      \
-  rm -rf "$$STAGE" ;							      \
+  sudo rm -rf "$$STAGE" ;						      \
   echo + mkdir -p "$$DST" ;						      \
          mkdir -p "$$DST" ;						      \
 									      \
@@ -327,20 +388,26 @@ _dmg::
    ok=yes ;								      \
    ff=`echo $$f | perl -e '$$_=<>; s@^.*/(.*)\..*$$@\L$$1@; print'`;	      \
    for r in $$retired ; do						      \
-    if [ "$$ff" = "$$r" ]; then ok=no ; fi ;				      \
+     if [ "$$ff" = "$$r" ]; then ok=no ; fi ;				      \
    done ;								      \
    if [ "$$ff" = testx11 ]; then ok=no ; fi ;				      \
    if [ "$$f2" = "XScreenSaverUpdater.app" ]; then			      \
-    DST_HACK="XScreenSaver.updater" ;					      \
-    echo + tar ... "$$DST/$$DST_HACK" ;					      \
-    ( cd $$SRC ; tar -czf - "$$f2" ) > "$$DST/$$DST_HACK" ;		      \
+     DST_HACK="XScreenSaver.updater" ;					      \
+     echo + tar ... "$$DST/$$DST_HACK" ;				      \
+     CWD=`pwd` ;							      \
+     ( cd $$SRC ; tar -czf "$$CWD/$$DST/$$DST_HACK" "$$f2" ) ;		      \
+     echo ' fuck you apple' >> $$DST/$$DST_HACK ;			      \
    elif [ "$$ok" = yes ]; then						      \
-    echo + cp -pR "$$f" "$$DST/" ;					      \
-           cp -pR "$$f" "$$DST/" ;					      \
+     echo + cp -pR "$$f" "$$DST/" ;					      \
+            cp -pR "$$f" "$$DST/" ;					      \
    else									      \
-    echo skipping "$$f" ;						      \
+     echo skipping "$$f" ;						      \
    fi ;									      \
   done ;								      \
+									      \
+  echo "Re-signing Apple2 and Phosphor..." ;				      \
+  codesign --force --sign $(CERT2) --timestamp -o runtime "$$DST/"*.app/Contents/PlugIns/*.saver ; \
+  codesign --force --sign $(CERT2) --timestamp -o runtime "$$DST/"*.app ;     \
 									      \
   set -x ;								      \
   cp -p bindist.rtf "$$STAGE/Read Me.rtf" ;				      \
@@ -362,23 +429,43 @@ _dmg::
   mv "$$STAGE/bindist2.webloc" "$$STAGE/Get the Android Version.webloc" ;     \
 									      \
   set +x ;								      \
+									      \
+  echo "Chowning..." ;							      \
+  sudo chown -R root:wheel "$$STAGE/"* ;				      \
+									      \
   echo "Checking signatures..." ;					      \
-  spctl --assess --type install "$$PKG" ;				      \
-  spctl --assess --type execute "$$SRC/XScreenSaverUpdater.app" ;	      \
-  spctl --assess --type execute "$$DST/"*.app ;				      \
-  spctl --assess --type install "$$DST/"*.saver ;			      \
+  if false; then							      \
+    spctl --assess --type install "$$PKG" ;				      \
+    spctl --assess --type execute "$$SRC/XScreenSaverUpdater.app" ;	      \
+    spctl --assess --type execute "$$DST/"*.app ;			      \
+    spctl --assess --type install "$$DST/"*.saver ;			      \
+  else									      \
+    true codesign -vv --deep --strict "$$PKG" ;				      \
+    codesign -vv --deep --strict "$$SRC/XScreenSaverUpdater.app" ;	      \
+    true codesign -vv --deep --strict "$$DST/"*.app ;			      \
+    true codesign -vv --deep --strict "$$DST/"*.saver ;			      \
+  fi ;									      \
+									      \
   set -x ;								      \
 									      \
   hdiutil makehybrid -quiet -ov -hfs -hfs-volume-name "$$VOLNAME"	      \
     -hfs-openfolder "$$STAGE" "$$STAGE" -o "$$TMPDMG" ;			      \
-  rm -rf "$$STAGE" ;							      \
+  echo "Deleting..." ;							      \
+  sudo rm -rf "$$STAGE" ;						      \
 									      \
   hdiutil convert -quiet -ov -format UDBZ -imagekey zlib-level=9	      \
     "$$TMPDMG" -o "$$DMG" ;						      \
   xattr -w com.apple.quarantine "0000;00000000;;" "$$DMG" ;		      \
   rm -f "$$TMPDMG" ;							      \
+									      \
+  codesign --sign $(CERT2) "$$DMG" ;					      \
+  if false; then							      \
+    spctl --assess --type install "$$DMG" ;				      \
+  else									      \
+    codesign -vvv --deep --strict "$$DMG" ;				      \
+  fi ;									      \
+									      \
   ls -ldhgF "$$DMG" ;							      \
-  $(MAKE) notarize ;							      \
 
 
 # To set up notarization:
@@ -388,57 +475,71 @@ _dmg::
 #  - Name: "altool-notarizer", Account: "jwz@jwz.org",
 #    Pass: the one you just generated.
 #
-# "make notarize", which will upload the DMG (slow).
-# A response will be emailed back in about an hour.
-# When that arrives, "make staple".
+# As of Xcode 13, "altool" is obsolete because of course it is.
+# The new way is "notarytool".
 #
-# https://developer.apple.com/documentation/security/notarizing_your_app_before_distribution/customizing_the_notarization_workflow?language=objc
+# "make notarize" will upload the DMG (slow).
 #
 # Note that if Sparkle.framework/.../Autoupdate.app is not independently
 # signed, it won't pass. I had to add a build phase for that.
 #
-NOTARGS=-u "jwz@jwz.org" -p "@keychain:altool-notarizer"
+# - xcrun notarytool store-credentials --apple-id jwz@jwz.org
+#   - Profile name: altool-notarizer
+#   - App-specific password: [the above]
+#   - Developer Team ID: 4627ATJELP
+# - Credentials saved to Keychain.
+#   To use them, specify `--keychain-profile "altool-notarizer"
+#
+#NOTARGS=-u "jwz@jwz.org" -p "@keychain:altool-notarizer"
 
+
+# Send a notarization request, and then wait for the result.
+#
 notarize::
 	@								      \
   set -e ;								      \
   SRC=../utils/version.h ;						      \
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' $$SRC` ;		      \
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ]*\).*/\1/p' $$SRC | head -1` ;	      \
   BASE="xscreensaver-$$V" ;						      \
   OUTDIR="../archive" ;							      \
   DMG="$$OUTDIR/$$BASE.dmg" ;						      \
-  set -x ;								      \
-  xcrun altool --notarize-app --primary-bundle-id "org.jwz.xscreensaver"      \
-    --file "$$DMG" $(NOTARGS) ;						      \
+  CMD="xcrun notarytool submit $$DMG" ;					      \
+  CMD="$$CMD --keychain-profile altool-notarizer" ;			      \
+  CMD="$$CMD --apple-id jwz@jwz.org --team-id 4627ATJELP --wait" ;	      \
+  echo "+ $$CMD" ;  							      \
   echo "" ;								      \
-  sleep 3 ;								      \
-  $(MAKE) notarize_wait staple updates.xml
+  RET=`$$CMD` ;  							      \
+  echo "$$RET";  							      \
+  echo "" ;								      \
+  ID=`echo "$$RET" | sed -n 's/.*id: *\([^ ]*\).*/\1/p' | head -1` ;	      \
+  STATUS=`echo "$$RET" | sed -n 's/.*status: *\([^ .]*\).*/\1/p' | head -1` ; \
+  if [ "x$$ID" = "x" ]; then						      \
+    echo "unparsable ID" ;						      \
+    exit 1 ;								      \
+  fi ;									      \
+  if [ x"$$STATUS" != "xAccepted" ]; then				      \
+    echo "ERROR: Bad status: $$STATUS" ;				      \
+    echo "" ;								      \
+    CMD="xcrun notarytool log $$ID --keychain-profile altool-notarizer" ;     \
+    echo "+ $$CMD" ;  							      \
+    $$CMD ;								      \
+    exit 1 ;								      \
+  fi ;									      \
+  echo "Notarization success: $$STATUS" ;				      \
+  exit 0
 
-notarize_wait::
-	@while ( xcrun altool --notarization-history 0 $(NOTARGS) |	      \
-		 grep -q 'in progress' ); do				      \
-	  echo `date +%I:%M:` "waiting for notarization..." ;		      \
-	  sleep 15 ;							      \
-	done ;								      \
-	echo '' ;							      \
-	xcrun altool --notarization-history 0 $(NOTARGS) ;		      \
 
 staple::
 	@								      \
   set -e ;								      \
   SRC=../utils/version.h ;						      \
-  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' $$SRC` ;		      \
+  V=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^ ]*\).*/\1/p' $$SRC | head -1` ;	      \
   BASE="xscreensaver-$$V" ;						      \
   OUTDIR="../archive" ;							      \
   DMG="$$OUTDIR/$$BASE.dmg" ;						      \
   set -x ;								      \
   xcrun stapler staple "$$DMG" ;					      \
-  xcrun stapler validate "$$DMG"
-
-notarization_history::
-	xcrun altool --notarization-history 0 $(NOTARGS)
-	@echo 'now do: xcrun altool $(NOTARGS) --notarization-info <UUID>' ;  \
-	echo 'and wget the LogFileURL'
+  xcrun stapler validate "$$DMG" ;					      \
 
 
 # When debugging, sometimes I have to reset the preferences for all

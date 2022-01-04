@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w
-# Copyright © 2013-2018 Jamie Zawinski <jwz@jwz.org>
+# Copyright © 2013-2020 Jamie Zawinski <jwz@jwz.org>
 #
 # Permission to use, copy, modify, distribute, and sell this software and its
 # documentation for any purpose is hereby granted without fee, provided that
@@ -21,7 +21,7 @@ use open ":encoding(utf8)";
 use POSIX;
 
 my $progname = $0; $progname =~ s@.*/@@g;
-my ($version) = ('$Revision: 1.5 $' =~ m/\s(\d[.\d]+)\s/s);
+my ($version) = ('$Revision: 1.8 $' =~ m/\s(\d[.\d]+)\s/s);
 
 my $verbose = 0;
 my $debug_p = 0;
@@ -54,6 +54,8 @@ sub generate_xml($$$$) {
       my ($sig2) = ($item =~ m/edSignature="(.*?)"/si);
       my ($date) = ($item =~ m/<pubDate>(.*?)</si);
       next unless $v;
+      $sig1 = '' if ($sig1 eq 'ERROR');
+      $sig2 = '' if ($sig2 eq 'ERROR');
       $sig1s{$v}  = $sig1 if $sig1;
       $sig2s{$v}  = $sig2 if $sig2;
       $dates{$v} = $date if $date;
@@ -70,17 +72,26 @@ sub generate_xml($$$$) {
 
   my $rss = "";
 
-  $body =~ s/^(\d+\.\d+[ \t])/\001$1/gm;
+  $body =~ s/^(\d+\.\d+(?:\.\d+)?[ \t])/\001$1/gm;
   my @log = split (/\001/, $body);
   shift @log;
   my $count = 0;
   foreach my $log (@log) {
-    my ($v1, $entry) = ($log =~ m/^(\d+\.\d+)\s+(.*)$/s);
+    my ($v1, $entry) = ($log =~ m/^(\d+\.\d+(?:\.\d+)?)\s+(.*)$/s);
 
     $entry =~ s/^\s*\d\d?[- ][A-Z][a-z][a-z][- ]\d{4}:?\s+//s;  # lose date
 
-    $entry =~ s/^\s+|\s+$//gs;
+    # unwrap continuation lines
+    $entry =~ s/^[ \t]*[-*][ \t]+/\001/gm;
+    $entry =~ s/\s+/ /gs;
+    $entry =~ s/\001/\n* /gs;
     $entry =~ s/^\s+|\s+$//gm;
+
+    # Since this updater is only for macOS, omit any changelog entry
+    # beginning with "X11:", "Android:" etc.
+    $entry =~ s/^[-*] (X11|Android|Linux|iOS): [^\n]+(\n|$)//gm;
+    $entry =~ s/^([-*] )macOS: /$1/gm;
+
     $entry =~ s/^[-*] /<BR>&bull; /gm;
     $entry =~ s/^<BR>//si;
     $entry =~ s/\s+/ /gs;
@@ -88,6 +99,9 @@ sub generate_xml($$$$) {
     my $v2 = $v1; $v2 =~ s/\.//gs;
     my $zip = undef;
   DONE:
+    # It only makes sense to include entries in this file for releases for
+    # which a DMG still exists. Expired releases and non-macOS releases
+    # aren't helpful.
     #foreach my $ext ('zip', 'dmg', 'tar.gz', 'tar.Z') {
     foreach my $ext ('dmg') {
       foreach my $v ($v1, $v2) {
@@ -100,6 +114,8 @@ sub generate_xml($$$$) {
         }
       }
     }
+
+    error ("no dmg for $v1") if (!$zip && $count == 0);
 
     my $publishedp = ($zip && -f "$www_dir/$zip");
     $publishedp = 1 if ($count == 0);
@@ -129,14 +145,20 @@ sub generate_xml($$$$) {
     if (!$sig1 && $zip) {	# Old-style sigs
       local %ENV = %ENV;
       $ENV{PATH} = "/usr/bin:$ENV{PATH}";
-      $sig1 = `$dsa_sign_update "$archive_dir/$zip" "$dsa_priv_key_file"`;
+      my $cmd = ("$dsa_sign_update" .
+                 " \"$archive_dir/$zip\"" .
+                 " \"$dsa_priv_key_file\"");
+      print STDERR "$progname: exec: $cmd\n" if ($verbose > 1);
+      $sig1 = `$cmd`;
       $sig1 =~ s/\s+//gs;
     }
 
     if (!$sig2 && $zip) {	# New-style sigs
       local %ENV = %ENV;
       $ENV{PATH} = "/usr/bin:$ENV{PATH}";
-      my $xml = `$edddsa_sign_update "$archive_dir/$zip"`;
+      my $cmd = "$edddsa_sign_update \"$archive_dir/$zip\"";
+      print STDERR "$progname: exec: $cmd\n" if ($verbose > 1);
+      my $xml = `$cmd`;
       ($sig2) = ($xml =~ m/sparkle:edSignature=\"([^\"<>\s]+)\"/si);
       error ("unparsable: $edddsa_sign_update: $xml") unless $sig2;
     }

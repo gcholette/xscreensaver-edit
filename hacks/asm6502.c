@@ -20,6 +20,10 @@
       I changed the structure of the assembler in this version.
 */
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 /*#include <malloc.h>*/
@@ -29,9 +33,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <math.h>
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
+
 #if defined(HAVE_STDINT_H)
 # include <stdint.h>
 #elif defined(HAVE_INTTYPES_H)
@@ -119,9 +121,8 @@ static void *ecalloc(uint32_t nelm, size_t nsize){
 
 /* estrdup() - Allocates memory for a new string a returns a copy of the source sting in it. */
 static char *estrdup(const char *source){
-  int ln = strlen(source) + 1;
-  char *s = ecalloc(ln, sizeof(char));
-  strncpy(s,source,ln);
+  char *s = strdup (source);
+  if (!s) abort();
   return s;
 }
 
@@ -1010,8 +1011,8 @@ static void jmpSTY(machine_6502 *machine, m6502_AddrMode adm){
 static void assignOpCodes(m6502_Opcodes *opcodes){
 
  #define SETOP(num, _name, _Imm, _ZP, _ZPX, _ZPY, _ABS, _ABSX, _ABSY, _INDX, _INDY, _SNGL, _BRA, _func) \
-{opcodes[num].name[3] = '\0'; \
- strncpy(opcodes[num].name, _name, 3); opcodes[num].Imm = _Imm; opcodes[num].ZP = _ZP; \
+{sprintf(opcodes[num].name, "%.*s", MAX_LABEL_LEN-1, _name); \
+ opcodes[num].Imm = _Imm; opcodes[num].ZP = _ZP; \
  opcodes[num].ZPX = _ZPX; opcodes[num].ZPY = _ZPY; opcodes[num].ABS = _ABS; \
  opcodes[num].ABSX = _ABSX; opcodes[num].ABSY = _ABSY; opcodes[num].INDX = _INDX; \
  opcodes[num].INDY = _INDY; opcodes[num].SNGL = _SNGL; opcodes[num].BRA = _BRA; \
@@ -1179,7 +1180,7 @@ static AsmLine *newAsmLine(char *cmd, char *label, BOOL decl, Param *param, int 
     newp =  (AsmLine *) ecalloc(1, sizeof(AsmLine));
     newp->labelDecl = decl;
     newp->label = newLabel();
-    strncpy(newp->label->label,label,MAX_LABEL_LEN);
+    sprintf(newp->label->label, "%.*s", MAX_LABEL_LEN - 1, label);
     newp->command = estrdup(cmd);
     newp->param = newParam();
     copyParam(newp->param, param);
@@ -1413,8 +1414,7 @@ static BOOL immediate(char **s, Param *param){
     param->type = (**s == '<') ? IMMEDIATE_LESS : IMMEDIATE_GREAT;
     (*s)++; /* move past < or > */
     if (paramLabel(s, &label)){
-      int ln = strlen(label) + 1;
-      strncpy(param->label, label, ln);
+      sprintf(param->label, "%.*s", MAX_LABEL_LEN-1, label);
       free(label);
       return TRUE;
     }    
@@ -2069,7 +2069,7 @@ static BOOL compileCode(machine_6502 *machine, const char *code){
     }
   }
   else{
-    fprintf(stderr,"An error occured while parsing the file.\n");  
+    fprintf(stderr,"An error occurred while parsing the file.\n");
     codeOk = FALSE;
   }
   freeallAsmLine(asmlist);
@@ -2117,7 +2117,6 @@ machine_6502 *m6502_build(void){
 
 void m6502_destroy6502(machine_6502 *machine){
   free(machine);
-  machine = NULL;
 }
 
 void m6502_trace(machine_6502 *machine, FILE *output){

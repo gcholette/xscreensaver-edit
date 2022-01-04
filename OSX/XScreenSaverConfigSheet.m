@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2017 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2006-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -29,7 +29,7 @@
 #import "jwxyz.h"
 #import "InvertedSlider.h"
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 # define NSView      UIView
 # define NSRect      CGRect
 # define NSSize      CGSize
@@ -46,10 +46,26 @@
 # define LABEL       UILabel
 #else
 # define LABEL       NSTextField
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
+
+# if defined(HAVE_IPHONE) && \
+     !defined(HAVE_TVOS) && \
+     (__IPHONE_OS_VERSION_MIN_REQUIRED >= __IPHONE_8_0)
+#  define USE_WEBKIT
+# endif
+
+#ifdef USE_WEBKIT
+# import <WebKit/WebKit.h>
+# define UIWebView WKWebView
+# define UIWebViewDelegate WKUIDelegate
+#endif
+
 
 #undef LABEL_ABOVE_SLIDER
-#define USE_HTML_LABELS
+
+#ifndef HAVE_TVOS
+# define USE_HTML_LABELS
+#endif
 
 
 #pragma mark XML Parser
@@ -103,10 +119,19 @@ typedef enum { SimpleXMLCommentKind,
 @synthesize attributes;
 @synthesize object;
 
+- (void) dealloc
+{
+  [name release];
+  [children release];
+  //[attributes release];
+  [object release];
+  [super dealloc];
+}
+
 - (id) init
 {
   self = [super init];
-  attributes = [NSMutableArray arrayWithCapacity:10];
+  attributes = [[NSMutableArray alloc] initWithCapacity:10];
   return self;
 }
 
@@ -155,7 +180,7 @@ typedef enum { SimpleXMLCommentKind,
 // A value transformer for mapping "url" to "3" and vice versa in the
 // "textMode" preference, since NSMatrix uses NSInteger selectedIndex.
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 @interface TextModeTransformer: NSValueTransformer {}
 @end
 @implementation TextModeTransformer
@@ -189,7 +214,26 @@ typedef enum { SimpleXMLCommentKind,
   return value;
 }
 @end
-#endif // USE_IPHONE
+
+/* Current theory is that the @"value" KVO binding on NSTextFields are
+   sometimes returning nil when they're empty, but meanwhile
+   [NSUserDefaults setObject:forKey:] needs non-nil objects.
+ */
+@interface NonNilStringTransformer: NSValueTransformer {}
+@end
+@implementation NonNilStringTransformer
++ (Class)transformedValueClass { return [NSString class]; }
++ (BOOL)allowsReverseTransformation { return YES; }
+
+- (id)transformedValue:(id)value {
+  return value ? value : @"";
+}
+
+- (id)reverseTransformedValue:(id)value {
+  return value ? value : @"";
+}
+@end
+#endif // !HAVE_IPHONE
 
 
 #pragma mark Implementing radio buttons
@@ -199,7 +243,7 @@ typedef enum { SimpleXMLCommentKind,
    Let's fake up some radio buttons instead.
  */
 
-#if defined(USE_IPHONE) && !defined(USE_PICKER_VIEW)
+#if defined(HAVE_IPHONE) && !defined(USE_PICKER_VIEW)
 
 @interface RadioButton : UILabel
 {
@@ -216,6 +260,12 @@ typedef enum { SimpleXMLCommentKind,
 
 @synthesize index;
 @synthesize items;
+
+- (void)dealloc
+{
+  [items release];
+  [super dealloc];
+}
 
 - (id) initWithIndex:(int)_index items:_items
 {
@@ -238,7 +288,8 @@ typedef enum { SimpleXMLCommentKind,
 
 # pragma mark Implementing labels with clickable links
 
-#if defined(USE_IPHONE) && defined(USE_HTML_LABELS)
+#if defined(HAVE_IPHONE) && defined(USE_HTML_LABELS)
+
 
 @interface HTMLLabel : UIView <UIWebViewDelegate>
 {
@@ -269,8 +320,12 @@ typedef enum { SimpleXMLCommentKind,
   if (! self) return 0;
   font = [f retain];
   webView = [[UIWebView alloc] init];
+# ifdef USE_WEBKIT
+  webView.UIDelegate = self;
+# else
   webView.delegate = self;
   webView.dataDetectorTypes = UIDataDetectorTypeNone;
+# endif
   self.   autoresizingMask = UIViewAutoresizingNone;  // we do it manually
   webView.autoresizingMask = UIViewAutoresizingNone;
   webView.scrollView.scrollEnabled = NO; 
@@ -298,6 +353,20 @@ typedef enum { SimpleXMLCommentKind,
   [h retain];
   if (html) [html release];
   html = h;
+
+  BOOL dark_mode_p = FALSE;
+  {
+    UITraitCollection *t = [self traitCollection];
+#   pragma clang diagnostic push   // "only available on iOS 12.0 or newer"
+#   pragma clang diagnostic ignored "-Wunguarded-availability-new"
+    if (t && [t respondsToSelector:@selector(userInterfaceStyle)] &&
+        [t userInterfaceStyle] == UIUserInterfaceStyleDark)
+      dark_mode_p = TRUE;
+#   pragma clang diagnostic pop
+  }
+
+  double pointsize = [font pointSize];
+  double lineheight = [font lineHeight];
   NSString *h2 =
     [NSString stringWithFormat:
                 @"<!DOCTYPE HTML PUBLIC "
@@ -305,11 +374,11 @@ typedef enum { SimpleXMLCommentKind,
                    " \"http://www.w3.org/TR/html4/loose.dtd\">"
                  "<HTML>"
                   "<HEAD>"
-//                   "<META NAME=\"viewport\" CONTENT=\""
-//                      "width=device-width"
-//                      "initial-scale=1.0;"
-//                      "maximum-scale=1.0;\">"
-                   "<STYLE>"
+                   "<META NAME=\"viewport\" CONTENT=\""
+                      "width=device-width, "
+                      "initial-scale=1.0, "
+                      "maximum-scale=1.0\" />"
+                   "<STYLE TYPE=\"text/css\">"
                     "<!--\n"
                       "body {"
                       " margin: 0; padding: 0; border: 0;"
@@ -317,7 +386,9 @@ typedef enum { SimpleXMLCommentKind,
                       " font-size: %.4fpx;"	// Must be "px", not "pt"!
                       " line-height: %.4fpx;"   // And no spaces before it.
                       " -webkit-text-size-adjust: none;"
+                      " color: %@;"
                       "}"
+                    " a { color: %@ !important; }"
                     "\n//-->\n"
                    "</STYLE>"
                   "</HEAD>"
@@ -325,13 +396,64 @@ typedef enum { SimpleXMLCommentKind,
                    "%@"
                   "</BODY>"
                  "</HTML>",
-              [font fontName],
-              [font pointSize],
-              [font lineHeight],
+              // [font fontName],  // Returns ".SFUI-Regular", doesn't work.
+              @"Helvetica", // "SanFranciscoDisplay-Regular" also doesn't work.
+              pointsize,
+              lineheight,
+              (dark_mode_p ? @"#FFF" : @"#000"),
+              (dark_mode_p ? @"#0DF" : @"#00E"),
               h];
   [webView stopLoading];
   [webView loadHTMLString:h2 baseURL:[NSURL URLWithString:@""]];
+
+#if 0  // Attempt to compute the size of the HTML the right way
+# ifdef USE_WEBKIT
+  [webView addObserver: self
+            forKeyPath: @"loading"
+               options: NSKeyValueObservingOptionNew
+               context: nil];
+# endif // USE_WEBKIT
+# endif
 }
+
+
+#ifdef USE_WEBKIT  // Attempt to compute the size of the HTML the right way
+#if 0
+
+- (void) observeValueForKeyPath: (NSString *) path
+                       ofObject: (id) object
+                         change: (NSDictionary<NSKeyValueChangeKey,id> *)change
+                        context: (void *) context
+{
+  // Wait for the HTML to load in the DOM, then set the height of the view
+  // to be the height of the document.
+
+  if ([object isKindOfClass: [WKWebView class]] &&
+      [path isEqualToString: @"loading"] &&
+      ! [change[NSKeyValueChangeNewKey] boolValue]) {  // loading == 0
+    WKWebView *view = (WKWebView *) object;
+    [view evaluateJavaScript: @"document.body.offsetHeight"
+           completionHandler: ^(id response, NSError *error) {
+
+        // #### This doesn't work: Munch gets clipped, Molecule is too tall.
+
+        NSView *parent = view;
+        while (parent && ![parent isKindOfClass: [HTMLLabel class]])
+          parent = view.superview;
+        CGRect frame = parent.frame;
+        frame.size.height = [response floatValue];
+        parent.frame = frame;
+
+        while (parent &&
+               ![parent isKindOfClass: [XScreenSaverConfigSheet class]])
+          parent = view.superview;
+        [((XScreenSaverConfigSheet *) parent) refreshTableView];
+      }];
+  }
+}
+
+# endif // 0
+# endif // USE_WEBKIT
 
 
 static char *anchorize (const char *url);
@@ -379,7 +501,19 @@ static char *anchorize (const char *url);
 {
   // Force clicked links to open in Safari, not in this window.
   if (type == UIWebViewNavigationTypeLinkClicked) {
-    [[UIApplication sharedApplication] openURL:[req URL]];
+    UIApplication *app = [UIApplication sharedApplication];
+    NSURL *url = [req URL];
+
+    if ([app respondsToSelector:
+              @selector(openURL:options:completionHandler:)]) {
+      [app openURL:url options:@{} completionHandler:nil];
+    } else {
+#     pragma clang diagnostic push   // "openURL deprecated in iOS 10"
+#     pragma clang diagnostic ignored "-Wdeprecated-declarations"
+      [app openURL:url];
+#     pragma clang diagnostic pop
+    }
+
     return NO;
   }
   return YES;
@@ -443,17 +577,15 @@ static char *anchorize (const char *url);
 
        - Start the document loading;
        - return a default height to use for the UITableViewCell;
-       - wait for the webViewDidFinishLoad delegate method to fire;
+       - wait for the webViewDidFinishLoad delegate method to fire,
+         or observe "loading" going to 0;
+       - get document.body.offsetHeight from JavaScript;
        - then force the UITableView to reload, to pick up the new height.
 
-     But I couldn't make that work.
+     But I couldn't make that work with either UIWebView or WKWebView.
+     So instead we measure the string itself and just assume that the
+     fonts and layout are the same.  Or close enough.
    */
-# if 0
-  r.size.height = [[webView
-                     stringByEvaluatingJavaScriptFromString:
-                       @"document.body.offsetHeight"]
-                    doubleValue];
-# else
   NSString *text = [self stripTags: html];
   CGSize s = r.size;
   s.height = 999999;
@@ -462,8 +594,6 @@ static char *anchorize (const char *url);
                       attributes:@{NSFontAttributeName: font}
                          context:nil].size;
   r.size.height = s.height;
-# endif
-
   [self setFrame: r];
 }
 
@@ -478,25 +608,25 @@ static char *anchorize (const char *url);
 
 @end
 
-#endif // USE_IPHONE && USE_HTML_LABELS
+#endif // HAVE_IPHONE && USE_HTML_LABELS
 
 
 @interface XScreenSaverConfigSheet (Private)
 
 - (void)traverseChildren:(NSXMLNode *)node on:(NSView *)parent;
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 - (void) placeChild: (NSView *)c on:(NSView *)p right:(BOOL)r;
 - (void) placeChild: (NSView *)c on:(NSView *)p;
 static NSView *last_child (NSView *parent);
 static void layout_group (NSView *group, BOOL horiz_p);
-# else // USE_IPHONE
+# else // HAVE_IPHONE
 - (void) placeChild: (NSObject *)c on:(NSView *)p right:(BOOL)r;
 - (void) placeChild: (NSObject *)c on:(NSView *)p;
 - (void) placeSeparator;
 - (void) bindResource:(NSObject *)ctl key:(NSString *)k reload:(BOOL)r;
 - (void) refreshTableView;
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
 @end
 
@@ -514,16 +644,20 @@ static void layout_group (NSView *group, BOOL horiz_p);
 
 
 /* Normally we read resources by looking up "KEY" in the database
-   "org.jwz.xscreensaver.SAVERNAME".  But in the all-in-one iPhone
+   "org.jwz.xscreensaver.CLASSNAME".  But in the all-in-one iPhone
    app, everything is stored in the database "org.jwz.xscreensaver"
-   instead, so transform keys to "SAVERNAME.KEY".
+   instead, so transform keys to "CLASSNAME.KEY".
 
    NOTE: This is duplicated in PrefsReader.m, cause I suck.
  */
 - (NSString *) makeKey:(NSString *)key
 {
-# ifdef USE_IPHONE
-  NSString *prefix = [saver_name stringByAppendingString:@"."];
+# ifdef HAVE_IPHONE
+  if ([key isEqualToString:@"globalCycle"] ||
+      [key isEqualToString:@"globalCycleTimeout"])
+    return key;  // These two are global, not per-saver.
+
+  NSString *prefix = [classname stringByAppendingString:@"."];
   if (! [key hasPrefix:prefix])  // Don't double up!
     key = [prefix stringByAppendingString:key];
 # endif
@@ -612,10 +746,11 @@ static void layout_group (NSView *group, BOOL horiz_p);
 }
 
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 
 // Called when a slider is bonked.
 //
+# ifndef HAVE_TVOS
 - (void)sliderAction:(UISlider*)sender
 {
   if ([active_text_field canResignFirstResponder])
@@ -633,7 +768,10 @@ static void layout_group (NSView *group, BOOL horiz_p);
                : [NSNumber numberWithDouble: v])
     forKey:pref_key];
 }
+# endif // !HAVE_TVOS
 
+
+# ifndef HAVE_TVOS
 // Called when a checkbox/switch is bonked.
 //
 - (void)switchAction:(UISwitch*)sender
@@ -644,6 +782,8 @@ static void layout_group (NSView *group, BOOL horiz_p);
   NSString *v = ([sender isOn] ? @"true" : @"false");
   [[self controllerForKey:pref_key] setObject:v forKey:pref_key];
 }
+# endif // !HAVE_TVOS
+
 
 # ifdef USE_PICKER_VIEW
 // Called when a picker is bonked.
@@ -703,20 +843,20 @@ static void layout_group (NSView *group, BOOL horiz_p);
 
 # endif // !USE_PICKER_VIEW
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
 - (void) okAction:(NSObject *)arg
 {
+  // Without this, edits to text fields only happen if the user hits RET.
+  // Clicking OK should also commit those edits.
+  [self makeFirstResponder:nil];
+
   // Without the setAppliesImmediately:, when the saver restarts, it's still
   // got the old settings. -[XScreenSaverConfigSheet traverseTree] sets this
   // to NO; default is YES.
-
-  // #### However: I'm told that when these are set to YES, then changes to
-  // 'textLiteral', 'textURL' and 'textProgram' are ignored, but 'textFile'
-  // works.  In StarWars, at least...
 
   [userDefaultsController   setAppliesImmediately:YES];
   [globalDefaultsController setAppliesImmediately:YES];
@@ -735,15 +875,15 @@ static void layout_group (NSView *group, BOOL horiz_p);
   [NSApp endSheet:self returnCode:NSCancelButton];
   [self close];
 }
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
 
 - (void) resetAction:(NSObject *)arg
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   [userDefaultsController   revertToInitialValues:self];
   [globalDefaultsController revertToInitialValues:self];
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   for (NSString *key in defaultOptions) {
     NSObject *val = [defaultOptions objectForKey:key];
@@ -756,7 +896,7 @@ static void layout_group (NSView *group, BOOL horiz_p);
   }
 
   [self refreshTableView];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 
@@ -766,7 +906,7 @@ static void layout_group (NSView *group, BOOL horiz_p);
          reload:(BOOL)reload_p
 {
   NSUserDefaultsController *prefs = [self controllerForKey:pref_key];
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   NSDictionary *opts_dict = nil;
   NSString *bindto = ([control isKindOfClass:[NSPopUpButton class]]
                       ? @"selectedObject"
@@ -777,6 +917,9 @@ static void layout_group (NSView *group, BOOL horiz_p);
   if ([control isKindOfClass:[NSMatrix class]]) {
     opts_dict = @{ NSValueTransformerNameBindingOption:
                    @"TextModeTransformer" };
+  } else if ([control isKindOfClass:[NSTextField class]]) {
+    opts_dict = @{ NSValueTransformerNameBindingOption:
+                     @"NonNilStringTransformer" };
   }
 
   [control bind:bindto
@@ -784,7 +927,7 @@ static void layout_group (NSView *group, BOOL horiz_p);
     withKeyPath:[@"values." stringByAppendingString: pref_key]
         options:opts_dict];
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
   SEL sel;
   NSObject *val = [prefs objectForKey:pref_key];
   NSString *sval = 0;
@@ -804,6 +947,7 @@ static void layout_group (NSView *group, BOOL horiz_p);
     sval = [(NSNumber *) val stringValue];
   }
 
+# ifndef HAVE_TVOS
   if ([control isKindOfClass:[UISlider class]]) {
     sel = @selector(sliderAction:);
     // Hacky API. See comment in InvertedSlider.m.
@@ -814,6 +958,10 @@ static void layout_group (NSView *group, BOOL horiz_p);
   } else if ([control isKindOfClass:[UISwitch class]]) {
     sel = @selector(switchAction:);
     [(UISwitch *) control setOn: ((int) dval != 0)];
+# else  // HAVE_TVOS
+  if (0) {
+# endif // HAVE_TVOS
+
 # ifdef USE_PICKER_VIEW
   } else if ([control isKindOfClass:[UIPickerView class]]) {
     sel = 0;
@@ -848,7 +996,7 @@ static void layout_group (NSView *group, BOOL horiz_p);
     }
   }
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
 # if 0
   NSObject *def = [[prefs defaults] objectForKey:pref_key];
@@ -861,7 +1009,7 @@ static void layout_group (NSView *group, BOOL horiz_p);
   s = [s stringByPaddingToLength:30 withString:@" " startingAtIndex:0];
   s = [NSString stringWithFormat:@"%@ %@ / %@", s,
                 [def class], [control class]];
-#  ifndef USE_IPHONE
+#  ifndef HAVE_IPHONE
   s = [NSString stringWithFormat:@"%@ / %@", s, bindto];
 #  endif
   NSLog (@"%@", s);
@@ -944,7 +1092,7 @@ unwrap (NSString *text)
 }
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 /* Makes the text up to the first comma be bold.
  */
 static void
@@ -960,7 +1108,7 @@ boldify (NSText *nstext)
   font = [NSFont boldSystemFontOfSize:[font pointSize]];
   [nstext setFont:font range:r];
 }
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
 
 /* Creates a human-readable anchor to put on a URL.
@@ -1034,14 +1182,14 @@ anchorize (const char *url)
 }
 
 
-#if !defined(USE_IPHONE) || !defined(USE_HTML_LABELS)
+#if !defined(HAVE_IPHONE) || !defined(USE_HTML_LABELS)
 
 /* Converts any http: URLs in the given text field to clickable links.
  */
 static void
 hreffify (NSText *nstext)
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   NSString *text = [nstext string];
   [nstext setRichText:YES];
 # else
@@ -1094,7 +1242,7 @@ hreffify (NSText *nstext)
     //
     char *anchor = anchorize(url);
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
     // Construct the RTF corresponding to <A HREF="url">anchor</A>
     //
@@ -1105,14 +1253,14 @@ hreffify (NSText *nstext)
     NSData *rtfdata = [NSData dataWithBytesNoCopy:rtf length:strlen(rtf)];
     [nstext replaceCharactersInRange:r2 withRTF:rtfdata];
 
-# else  // !USE_IPHONE
+# else  // !HAVE_IPHONE
     // *anchor = 0; // Omit Wikipedia anchor 
     text = [text stringByReplacingCharactersInRange:r2
                  withString:[NSString stringWithCString:anchor
                                       encoding:NSUTF8StringEncoding]];
     // text = [text stringByReplacingOccurrencesOfString:@"\n\n\n"
     //              withString:@"\n\n"];
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
     free (anchor);
 
@@ -1121,13 +1269,13 @@ hreffify (NSText *nstext)
     L = L2;
   }
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   [nstext setText:text];
   [nstext sizeToFit];
 # endif
 }
 
-#endif /* !USE_IPHONE || !USE_HTML_LABELS */
+#endif /* !HAVE_IPHONE || !USE_HTML_LABELS */
 
 
 
@@ -1178,7 +1326,7 @@ hreffify (NSText *nstext)
       [dict removeObjectForKey:key];
   }
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   // Kludge for starwars.xml:
   // If there is a "_low-label" and no "_label", but "_low-label" contains
   // spaces, divide them.
@@ -1196,7 +1344,7 @@ hreffify (NSText *nstext)
       [dict setValue:[split objectAtIndex:1] forKey:@"_low-label"];
     }
   }
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 
@@ -1227,15 +1375,15 @@ hreffify (NSText *nstext)
   NSRect rect;
   rect.origin.x = rect.origin.y = 0;
   rect.size.width = rect.size.height = 10;
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   NSTextField *lab = [[NSTextField alloc] initWithFrame:rect];
   [lab setSelectable:NO];
   [lab setEditable:NO];
   [lab setBezeled:NO];
   [lab setDrawsBackground:NO];
-  [lab setStringValue:text];
+  [lab setStringValue:NSLocalizedString(text, @"")];
   [lab sizeToFit];
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
   UILabel *lab = [[UILabel alloc] initWithFrame:rect];
   [lab setText: [text stringByTrimmingCharactersInSet:
                  [NSCharacterSet whitespaceAndNewlineCharacterSet]]];
@@ -1245,7 +1393,7 @@ hreffify (NSText *nstext)
   [lab setLineBreakMode:NSLineBreakByTruncatingHead];
   [lab setAutoresizingMask: (UIViewAutoresizingFlexibleWidth |
                              UIViewAutoresizingFlexibleHeight)];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
   [lab autorelease];
   return lab;
 }
@@ -1255,15 +1403,21 @@ hreffify (NSText *nstext)
  */
 - (void) makeCheckbox:(NSXMLNode *)node on:(NSView *)parent
 {
-  NSMutableDictionary *dict = [@{ @"id":       @"",
+  NSMutableDictionary *dict = [@{ @"id":        @"",
                                   @"_label":    @"",
                                   @"arg-set":   @"",
-                                  @"arg-unset": @"" }
+                                  @"arg-unset": @"",
+                                  @"disabled":  @"" }
                                 mutableCopy];
   [self parseAttrs:dict node:node];
   NSString *label     = [dict objectForKey:@"_label"];
   NSString *arg_set   = [dict objectForKey:@"arg-set"];
   NSString *arg_unset = [dict objectForKey:@"arg-unset"];
+
+  NSString *dd   = [dict objectForKey:@"disabled"];
+  BOOL disabledp = (dd &&
+                    (NSOrderedSame == [dd caseInsensitiveCompare:@"true"] ||
+                     NSOrderedSame == [dd caseInsensitiveCompare:@"yes"]));
   [dict release];
   dict = 0;
   
@@ -1295,7 +1449,7 @@ hreffify (NSText *nstext)
   rect.origin.x = rect.origin.y = 0;
   rect.size.width = rect.size.height = 10;
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
   NSButton *button = [[NSButton alloc] initWithFrame:rect];
   [button setButtonType:NSSwitchButton];
@@ -1303,17 +1457,25 @@ hreffify (NSText *nstext)
   [button sizeToFit];
   [self placeChild:button on:parent];
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   LABEL *lab = [self makeLabel:label];
   [self placeChild:lab on:parent];
+# ifndef HAVE_TVOS
   UISwitch *button = [[UISwitch alloc] initWithFrame:rect];
   [self placeChild:button on:parent right:YES];
+# endif // !HAVE_TVOS
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
   
-  [self bindSwitch:button cmdline:(arg_set ? arg_set : arg_unset)];
+# ifndef HAVE_TVOS
+  if (disabledp)
+    [button setEnabled:NO];
+  else
+    [self bindSwitch:button cmdline:(arg_set ? arg_set : arg_unset)];
+
   [button release];
+# endif // !HAVE_TVOS
 }
 
 
@@ -1331,6 +1493,7 @@ hreffify (NSText *nstext)
                                   @"arg":         @"",
                                   @"low":         @"",
                                   @"high":        @"",
+                                  @"step":        @"",
                                   @"default":     @"",
                                   @"convert":     @"" }
                                 mutableCopy];
@@ -1342,6 +1505,7 @@ hreffify (NSText *nstext)
   NSString *arg        = [dict objectForKey:@"arg"];
   NSString *low        = [dict objectForKey:@"low"];
   NSString *high       = [dict objectForKey:@"high"];
+  NSString *step_by    = [dict objectForKey:@"step"];
   NSString *def        = [dict objectForKey:@"default"];
   NSString *cvt        = [dict objectForKey:@"convert"];
   [dict release];
@@ -1377,7 +1541,7 @@ hreffify (NSText *nstext)
                   [high rangeOfCharacterFromSet:dot].location != NSNotFound);
 
   if ([type isEqualToString:@"slider"]
-# ifdef USE_IPHONE  // On iPhone, we use sliders for all numeric values.
+# ifdef HAVE_IPHONE  // On iPhone, we use sliders for all numeric values.
       || [type isEqualToString:@"spinbutton"]
 # endif
       ) {
@@ -1386,12 +1550,15 @@ hreffify (NSText *nstext)
     rect.origin.x = rect.origin.y = 0;    
     rect.size.width = 150;
     rect.size.height = 23;  // apparent min height for slider with ticks...
-    NSSlider *slider;
-    slider = [[InvertedSlider alloc] initWithFrame:rect
-                                     inverted: !!cvt
-                                     integers: !float_p];
+# ifndef HAVE_TVOS
+    InvertedSlider *slider =
+      [[InvertedSlider alloc] initWithFrame:rect
+                                   inverted: !!cvt
+                                   integers: !float_p];
     [slider setMaxValue:[high doubleValue]];
     [slider setMinValue:[low  doubleValue]];
+    if (step_by)
+      [slider setIncrement:[step_by doubleValue]];
     
     int range = [slider maxValue] - [slider minValue] + 1;
     int range2 = range;
@@ -1399,7 +1566,7 @@ hreffify (NSText *nstext)
     while (range2 > max_ticks)
       range2 /= 10;
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
     // If we have elided ticks, leave it at the max number of ticks.
     if (range != range2 && range2 < max_ticks)
       range2 = max_ticks;
@@ -1413,7 +1580,8 @@ hreffify (NSText *nstext)
     [slider setAllowsTickMarkValuesOnly:
               (range == range2 &&  // we are showing the actual number of ticks
                !float_p)];         // and we want integer results
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
+# endif // !HAVE_TVOS
 
     // #### Note: when the slider's range is large enough that we aren't
     //      showing all possible ticks, the slider's value is not constrained
@@ -1424,18 +1592,22 @@ hreffify (NSText *nstext)
     if (label) {
       lab = [self makeLabel:label];
       [self placeChild:lab on:parent];
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
+# ifndef HAVE_TVOS
       if (low_label) {
         CGFloat s = [NSFont systemFontSize] + 4;
         [lab setFont:[NSFont boldSystemFontOfSize:s]];
       }
+# endif // !HAVE_TVOS
 # endif
     }
     
     if (low_label) {
       lab = [self makeLabel:low_label];
-      [lab setFont:[NSFont systemFontOfSize:[NSFont smallSystemFontSize]]];      
-# ifndef USE_IPHONE
+# ifndef HAVE_TVOS
+      [lab setFont:[NSFont systemFontOfSize:[NSFont smallSystemFontSize]]];
+# endif // !HAVE_TVOS
+# ifndef HAVE_IPHONE
       [lab setAlignment:1];  // right aligned
       rect = [lab frame];
       if (rect.size.width < LEFT_LABEL_WIDTH)
@@ -1443,19 +1615,21 @@ hreffify (NSText *nstext)
       rect.size.height = [slider frame].size.height;
       [lab setFrame:rect];
       [self placeChild:lab on:parent];
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
       [lab setTextAlignment: NSTextAlignmentRight];
       // Sometimes rotation screws up truncation.
       [lab setLineBreakMode:NSLineBreakByClipping];
       [self placeChild:lab on:parent right:(label ? YES : NO)];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
      }
     
-# ifndef USE_IPHONE
+# ifndef HAVE_TVOS
+
+# ifndef HAVE_IPHONE
     [self placeChild:slider on:parent right:(low_label ? YES : NO)];
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
     [self placeChild:slider on:parent right:(label || low_label ? YES : NO)];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
     
     if (low_label) {
       // Make left label be same height as slider.
@@ -1479,7 +1653,7 @@ hreffify (NSText *nstext)
       // Make right label be same height as slider.
       rect.size.height = [slider frame].size.height;
       [lab setFrame:rect];
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
       // Sometimes rotation screws up truncation.
       [lab setLineBreakMode:NSLineBreakByClipping];
 # endif
@@ -1488,8 +1662,9 @@ hreffify (NSText *nstext)
 
     [self bindSwitch:slider cmdline:arg];
     [slider release];
+# endif // !HAVE_TVOS
     
-#ifndef USE_IPHONE  // On iPhone, we use sliders for all numeric values.
+#ifndef HAVE_IPHONE  // On iPhone, we use sliders for all numeric values.
 
   } else if ([type isEqualToString:@"spinbutton"]) {
 
@@ -1509,7 +1684,7 @@ hreffify (NSText *nstext)
     rect.size.width = rect.size.height = 10;
     
     NSTextField *txt = [[NSTextField alloc] initWithFrame:rect];
-    [txt setStringValue:@"0000.0"];
+    [txt setStringValue:NSLocalizedString(@"0000.0", @"")];
     [txt sizeToFit];
     [txt setStringValue:@""];
     
@@ -1549,7 +1724,9 @@ hreffify (NSText *nstext)
     [step setValueWraps:NO];
     
     double range = [high doubleValue] - [low doubleValue];
-    if (range < 1.0)
+    if (step_by)
+      [step setIncrement:[step_by doubleValue]];
+    else if (range < 1.0)
       [step setIncrement:range / 10.0];
     else if (range >= 500)
       [step setIncrement:range / 100.0];
@@ -1573,7 +1750,7 @@ hreffify (NSText *nstext)
     [step release];
     [txt release];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   } else {
     NSAssert2 (0, @"unknown type \"%@\" in \"%@\"", type, label);
@@ -1581,7 +1758,7 @@ hreffify (NSText *nstext)
 }
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 static void
 set_menu_item_object (NSMenuItem *item, NSObject *obj)
 {
@@ -1604,12 +1781,13 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   [item setRepresentedObject:obj];
   //NSLog (@"menu item \"%@\" = \"%@\" %@", [item title], obj, [obj class]);
 }
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
 
 /* Creates the popup menu described by the given XML node (and its children).
  */
 - (void) makeOptionMenu:(NSXMLNode *)node on:(NSView *)parent
+               disabled:(BOOL)disabled
 {
   NSArray *children = [node children];
   NSUInteger i, count = [children count];
@@ -1633,7 +1811,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
 
   NSString *menu_key = nil;   // the resource key used by items in this menu
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   // #### "Build and Analyze" says that all of our widgets leak, because it
   //      seems to not realize that placeChild -> addSubview retains them.
   //      Not sure what to do to make these warnings go away.
@@ -1643,7 +1821,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   NSMenuItem *def_item = nil;
   float max_width = 0;
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   NSString *def_item = nil;
 
@@ -1656,7 +1834,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
 #  endif // !USE_PICKER_VIEW
   NSMutableArray *items = [NSMutableArray arrayWithCapacity:10];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
   
   for (i = 0; i < count; i++) {
     NSXMLNode *child = [children objectAtIndex:i];
@@ -1685,11 +1863,11 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
       continue;
     }
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
     // create the menu item (and then get a pointer to it)
     [popup addItemWithTitle:label];
     NSMenuItem *item = [popup itemWithTitle:label];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
     if (arg_set) {
       NSString *this_val = NULL;
@@ -1707,7 +1885,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
       /* If this menu has the cmd line "-mode foo" then set this item's
          value to "foo" (the menu itself will be bound to e.g. "modeString")
        */
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
       set_menu_item_object (item, this_val);
 # else
       // Array holds ["Label", "resource-key", "resource-val"].
@@ -1718,7 +1896,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
     } else {
       // no arg-set -- only one menu item can be missing that.
       NSAssert1 (!def_item, @"no arg-set in \"%@\"", label);
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
       def_item = item;
 # else
       def_item = label;
@@ -1731,12 +1909,12 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
     /* make sure the menu button has room for the text of this item,
        and remember the greatest width it has reached.
      */
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
     [popup setTitle:label];
     [popup sizeToFit];
     NSRect r = [popup frame];
     if (r.size.width > max_width) max_width = r.size.width;
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
   }
   
   if (!menu_key) {
@@ -1755,16 +1933,16 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
     NSAssert2 (def_obj, 
                @"no default value for resource \"%@\" in menu item \"%@\"",
                menu_key,
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
                [def_item title]
 # else
                def_item
 # endif
                );
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
     set_menu_item_object (def_item, def_obj);
-# else  // !USE_IPHONE
+# else  // !HAVE_IPHONE
     for (NSMutableArray *a in items) {
       // Make sure each array contains the resource key.
       [a replaceObjectAtIndex:1 withObject:menu_key];
@@ -1773,10 +1951,10 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
           [def_item isEqualToString:[a objectAtIndex:0]])
         [a replaceObjectAtIndex:2 withObject:def_obj];
     }
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
   }
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 #  ifdef USE_PICKER_VIEW
   /* Finish tweaking the menu button itself.
    */
@@ -1788,13 +1966,20 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
 #  endif // USE_PICKER_VIEW
 # endif
 
-# if !defined(USE_IPHONE) || defined(USE_PICKER_VIEW)
+# if !defined(HAVE_IPHONE)
+  [self placeChild:popup on:parent];
+  if (disabled)
+    [popup setEnabled:NO];
+  else
+    [self bindResource:popup key:menu_key];
+  [popup release];
+# elif defined(USE_PICKER_VIEW)
   [self placeChild:popup on:parent];
   [self bindResource:popup key:menu_key];
   [popup release];
 # endif
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 #  ifdef USE_PICKER_VIEW
   // Store the items for this picker in the picker_values array.
   // This is so fucking stupid.
@@ -1803,7 +1988,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   if (! picker_values)
     picker_values = [[NSMutableArray arrayWithCapacity:menu_number] retain];
   while ([picker_values count] <= menu_number)
-    [picker_values addObject:[NSArray arrayWithObjects: nil]];
+    [picker_values addObject:@{}];
   [picker_values replaceObjectAtIndex:menu_number withObject:items];
   [popup reloadAllComponents];
 
@@ -1825,8 +2010,13 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   [self placeSeparator];
 
 #  endif // !USE_PICKER_VIEW
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
+}
+
+- (void) makeOptionMenu:(NSXMLNode *)node on:(NSView *)parent
+{
+ [self makeOptionMenu:node on:parent disabled:NO];
 }
 
 
@@ -1835,6 +2025,11 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
  */
 - (void) makeDescLabel:(NSXMLNode *)node on:(NSView *)parent
 {
+# ifdef HAVE_IPHONE
+  // The "auto-cycle" controls go just above the description.
+  [self makeCycleSaverControlBox:node on:parent];
+# endif
+
   NSString *text = nil;
   NSArray *children = [node children];
   NSUInteger i, count = [children count];
@@ -1854,7 +2049,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   rect.origin.x = rect.origin.y = 0;
   rect.size.width = 200;
   rect.size.height = 50;  // sized later
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   NSText *lab = [[NSText alloc] initWithFrame:rect];
   [lab autorelease];
   [lab setEditable:NO];
@@ -1866,12 +2061,14 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   boldify (lab);
   [lab sizeToFit];
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
 #  ifndef USE_HTML_LABELS
 
   UILabel *lab = [self makeLabel:text];
+# ifndef HAVE_TVOS
   [lab setFont:[NSFont systemFontOfSize: [NSFont systemFontSize]]];
+# endif // !HAVE_TVOS
   hreffify (lab);
 
 #  else  // USE_HTML_LABELS
@@ -1885,7 +2082,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
 
   [self placeSeparator];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   [self placeChild:lab on:parent];
 }
@@ -1921,21 +2118,23 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   
   NSTextField *txt = [[NSTextField alloc] initWithFrame:rect];
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
   // make the default size be around 30 columns; a typical value for
   // these text fields is "xscreensaver-text --cols 40".
   //
-  [txt setStringValue:@"123456789 123456789 123456789 "];
+  [txt setStringValue:
+         NSLocalizedString(@"123456789 123456789 123456789 ", @"")];
   [txt sizeToFit];
   [[txt cell] setWraps:NO];
   [[txt cell] setScrollable:YES];
   [txt setStringValue:@""];
   
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   txt.adjustsFontSizeToFitWidth = YES;
-  txt.textColor = [UIColor blackColor];
+  // Why did I do this? Messes up dark mode.
+  // txt.textColor = [UIColor blackColor];
   txt.font = [UIFont systemFontOfSize: FONT_SIZE];
   txt.placeholder = @"";
   txt.borderStyle = UITextBorderStyleRoundedRect;
@@ -1952,7 +2151,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   rect.size.height = [txt.font lineHeight] * 1.2;
   [txt setFrame:rect];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   if (label) {
     LABEL *lab = [self makeLabel:label];
@@ -1975,7 +2174,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
                 withLabel: (BOOL) label_p
                  editable: (BOOL) editable_p
 {
-# ifndef USE_IPHONE	// No files. No selectors.
+# ifndef HAVE_IPHONE	// No files. No selectors.
   NSMutableDictionary *dict = [@{ @"id":     @"",
                                   @"_label": @"",
                                   @"arg":    @"" }
@@ -2001,7 +2200,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
 
   // make the default size be around 20 columns.
   //
-  [txt setStringValue:@"123456789 123456789 "];
+  [txt setStringValue:NSLocalizedString(@"123456789 123456789 ", @"")];
   [txt sizeToFit];
   [txt setSelectable:YES];
   [txt setEditable:editable_p];
@@ -2037,7 +2236,7 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
   rect.origin.x = rect.origin.y = 0;    
   rect.size.width = rect.size.height = 10;
   NSButton *choose = [[NSButton alloc] initWithFrame:rect];
-  [choose setTitle:@"Choose..."];
+  [choose setTitle:NSLocalizedString(@"Choose...", @"")];
   [choose setBezelStyle:NSRoundedBezelStyle];
   [choose sizeToFit];
 
@@ -2056,11 +2255,11 @@ set_menu_item_object (NSMenuItem *item, NSObject *obj)
     [choose setAction:@selector(fileSelectorChooseAction:)];
 
   [choose release];
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 }
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
 /* Runs a modal file selector and sets the text field's value to the
    selected file or directory.
@@ -2072,6 +2271,22 @@ do_file_selector (NSTextField *txt, BOOL dirs_p)
   [panel setAllowsMultipleSelection:NO];
   [panel setCanChooseFiles:!dirs_p];
   [panel setCanChooseDirectories:dirs_p];
+  [panel setCanCreateDirectories:NO];
+
+  NSString *def = [[txt stringValue] stringByExpandingTildeInPath];
+  if (dirs_p) {
+    // Open in the previously-selected directory.
+    [panel setDirectoryURL:
+             [NSURL fileURLWithPath:def isDirectory:YES]];
+    [panel setNameFieldStringValue:[def lastPathComponent]];
+  } else {
+    // Open in the directory of the previously-selected file.
+    [panel setDirectoryURL:
+             [NSURL fileURLWithPath:[def stringByDeletingLastPathComponent]
+                    isDirectory:YES]];
+    // I hoped that this would select that file by default, but it does not.
+    [panel setNameFieldStringValue:[def lastPathComponent]];
+  }
 
   NSInteger result = [panel runModal];
   if (result == NSOKButton) {
@@ -2083,6 +2298,9 @@ do_file_selector (NSTextField *txt, BOOL dirs_p)
     // Fuck me!  Just setting the value of the NSTextField does not cause
     // that to end up in the preferences!
     //
+    [[txt window] makeFirstResponder:nil];  // And this doesn't fix it.
+
+    // So set the value manually.
     NSDictionary *dict = [txt infoForBinding:@"value"];
     NSUserDefaultsController *prefs = [dict objectForKey:@"NSObservedObject"];
     NSString *path = [dict objectForKey:@"NSObservedKeyPath"];
@@ -2130,12 +2348,12 @@ find_text_field_of_button (NSButton *button)
   do_file_selector (txt, YES);
 }
 
-#endif // !USE_IPHONE
+#endif // !HAVE_IPHONE
 
 
 - (void) makeTextLoaderControlBox:(NSXMLNode *)node on:(NSView *)parent
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   /*
     Display Text:
      (x)  Computer name and time
@@ -2198,7 +2416,7 @@ find_text_field_of_button (NSButton *button)
 
   NSXMLNode *node2;
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   NSView *rgroup = parent;
   NSXMLNode *node2;
@@ -2238,7 +2456,7 @@ find_text_field_of_button (NSButton *button)
   [self makeOptionMenu:node2 on:rgroup];
   [node2 release];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
 
   //  <string id="textLiteral" _label="" arg-set="-text-literal %"/>
@@ -2246,12 +2464,12 @@ find_text_field_of_button (NSButton *button)
   [node2 setAttributesAsDictionary:
            @{ @"id":     @"textLiteral",
               @"arg":    @"-text-literal %",
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
               @"_label": @"Text to display"
 # endif
             }];
   [self makeTextField:node2 on:rgroup 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
         withLabel:NO
 # else
         withLabel:YES
@@ -2270,7 +2488,7 @@ find_text_field_of_button (NSButton *button)
  */
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   //  <file id="textFile" _label="" arg-set="-text-file %"/>
   node2 = [[NSXMLElement alloc] initWithName:@"string"];
   [node2 setAttributesAsDictionary:
@@ -2279,7 +2497,7 @@ find_text_field_of_button (NSButton *button)
   [self makeFileSelector:node2 on:rgroup
         dirsOnly:NO withLabel:NO editable:NO];
   [node2 release];
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
 //  rect = [last_child(rgroup) frame];
 
@@ -2288,12 +2506,12 @@ find_text_field_of_button (NSButton *button)
   [node2 setAttributesAsDictionary:
            @{ @"id":     @"textURL",            
               @"arg":    @"-text-url %",
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
               @"_label": @"URL to display",     
 # endif
             }];
   [self makeTextField:node2 on:rgroup 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
         withLabel:NO
 # else
         withLabel:YES
@@ -2303,7 +2521,7 @@ find_text_field_of_button (NSButton *button)
 
 //  rect = [last_child(rgroup) frame];
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   if (program_p) {
     //  <string id="textProgram" _label="" arg-set="text-program %"/>
     node2 = [[NSXMLElement alloc] initWithName:@"string"];
@@ -2360,7 +2578,7 @@ find_text_field_of_button (NSButton *button)
   NSBox *box = [[NSBox alloc] initWithFrame:rect];
   [box setTitlePosition:NSAtTop];
   [box setBorderType:NSBezelBorder];
-  [box setTitle:@"Display Text"];
+  [box setTitle:NSLocalizedString(@"Display Text", @"")];
 
   rect.size.width = rect.size.height = 12;
   [box setContentViewMargins:rect.size];
@@ -2371,7 +2589,7 @@ find_text_field_of_button (NSButton *button)
   [group release];
   [box release];
 
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 }
 
 
@@ -2391,7 +2609,7 @@ find_text_field_of_button (NSButton *button)
 
   NSXMLElement *node2;
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 #  define SCREENS "Grab desktop images"
 #  define PHOTOS  "Choose random images"
 # else
@@ -2430,7 +2648,7 @@ find_text_field_of_button (NSButton *button)
 # undef SCREENS
 # undef PHOTOS
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   // Add a second, explanatory label below the file/URL selector.
 
   LABEL *lab2 = 0;
@@ -2442,13 +2660,13 @@ find_text_field_of_button (NSButton *button)
   r2.origin.x += 20;
   r2.origin.y += 14;
   [lab2 setFrameOrigin:r2.origin];
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 
 - (void) makeUpdaterControlBox:(NSXMLNode *)node on:(NSView *)parent
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   /*
     [x]  Check for Updates  [ Monthly ]
 
@@ -2481,6 +2699,7 @@ find_text_field_of_button (NSButton *button)
            @{ @"id":        @SUSUEnableAutomaticChecksKey,
               @"_label":    @"Automatically check for updates",
               @"arg-unset": @"-no-" SUSUEnableAutomaticChecksKey,
+              @"disabled":  (haveUpdater ? @"no" : @"yes")
             }];
   [self makeCheckbox:node2 on:group];
   [node2 release];
@@ -2528,11 +2747,25 @@ find_text_field_of_button (NSButton *button)
   [node3 autorelease];
 
   // </option>
-  [self makeOptionMenu:node2 on:group];
+  [self makeOptionMenu:node2 on:group disabled:!haveUpdater];
   [node2 release];
 
   // </hgroup>
   layout_group (group, TRUE);
+
+  if (!haveUpdater) {
+    // Add a second, explanatory label.
+    LABEL *lab2 = 0;
+    lab2 = [self makeLabel:@"XScreenSaverUpdater.app is not installed!\n"
+                            "Unable to check for updates."];
+    [self placeChild:lab2 on:group];
+
+    // Pack it in a little tighter vertically.
+    NSRect r2 = [lab2 frame];
+    r2.origin.x += -4;
+    r2.origin.y += 14;
+    [lab2 setFrameOrigin:r2.origin];
+  }
 
   rect.size.width = rect.size.height = 0;
   NSBox *box = [[NSBox alloc] initWithFrame:rect];
@@ -2547,14 +2780,84 @@ find_text_field_of_button (NSButton *button)
   [group release];
   [box release];
 
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 }
+
+
+#ifdef HAVE_IPHONE
+
+- (void) makeCycleSaverControlBox:(NSXMLNode *)node on:(NSView *)parent
+{
+  /*
+    Select a new saver after timeout     [x]
+          [--------------------------------]
+    Include this saver in "random" mode  [x]
+
+   <boolean id="globalCycle"
+            _label="Select a new saver after timeout"
+            arg-set="-global-cycle" />
+    <number id="globalCycleTimeout" type="slider"
+            arg="-global-cycle-timeout %"
+            _label="After"
+            _low-label="5 minutes"
+            _high-label="4 hours"
+            low="300" high="14400" default="3600" step="300" />
+   <boolean id="globalCycleSelected"
+            _label="Include this saver in \"random\" mode"
+            arg-set="-global-cycle-selected" />
+   */
+
+  NSXMLElement *node2;
+
+  [self placeSeparator];
+
+  // <boolean ...>
+
+  node2 = [[NSXMLElement alloc] initWithName:@"boolean"];
+  [node2 setAttributesAsDictionary:
+           @{ @"id":        @"globalCycle",
+              @"_label":    @"Select a new saver after timeout",
+              @"arg-unset": @"-no-global-cycle"
+            }];
+  [self makeCheckbox:node2 on:parent];
+  [node2 release];
+
+  // <number ...>
+
+  node2 = [[NSXMLElement alloc] initWithName:@"number"];
+  [node2 setAttributesAsDictionary:
+           @{ @"id":          @"globalCycleTimeout",
+              @"type":        @"slider",
+              @"_label":      @"",
+              @"arg":         @"-global-cycle-timeout %",
+              @"_low-label":  @"5 minutes",
+              @"_high-label": @"4 hours",
+              @"low":         @"300",
+              @"high":        @"14400",
+              @"default":     @"4600",
+              @"step":        @"300",
+             }];
+  [self makeNumberSelector:node2 on:parent];
+  [node2 release];
+
+  // <boolean ...>
+
+  node2 = [[NSXMLElement alloc] initWithName:@"boolean"];
+  [node2 setAttributesAsDictionary:
+           @{ @"id":        @"globalCycleSelected",
+              @"_label":    @"Include this saver in \"random\" mode",
+              @"arg-unset": @"-no-global-cycle-selected"
+            }];
+  [self makeCheckbox:node2 on:parent];
+  [node2 release];
+}
+#endif // HAVE_IPHONE
 
 
 #pragma mark Layout for controls
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 static NSView *
 last_child (NSView *parent)
 {
@@ -2565,21 +2868,21 @@ last_child (NSView *parent)
   else
     return [kids objectAtIndex:nkids-1];
 }
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 /* Add the child as a subview of the parent, positioning it immediately
    below or to the right of the previously-added child of that view.
  */
 - (void) placeChild:
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 	(NSObject *)child
 # else
 	(NSView *)child
 # endif
 	on:(NSView *)parent right:(BOOL)right_p
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   NSRect rect = [child frame];
   NSView *last = last_child (parent);
   if (!last) {
@@ -2599,7 +2902,7 @@ last_child (NSView *parent)
   [child setFrame:r];
   [parent addSubview:child];
 
-# else // USE_IPHONE
+# else // HAVE_IPHONE
 
   /* Controls is an array of arrays of the controls, divided into sections.
      Each hgroup / vgroup gets a nested array, too, e.g.:
@@ -2642,7 +2945,7 @@ last_child (NSView *parent)
       [current replaceObjectAtIndex:[current count]-1 withObject:a];
     }
   }
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 
@@ -2652,7 +2955,7 @@ last_child (NSView *parent)
 }
 
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 
 // Start putting subsequent children in a new group, to create a new
 // section on the UITableView.
@@ -2665,7 +2968,7 @@ last_child (NSView *parent)
         count] > 0)
     [controls addObject: [NSMutableArray arrayWithCapacity:10]];
 }
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 
@@ -2676,11 +2979,11 @@ last_child (NSView *parent)
                 on:(NSView *)parent
         horizontal:(BOOL) horiz_p
 {
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   if (!horiz_p) [self placeSeparator];
   [self traverseChildren:node on:parent];
   if (!horiz_p) [self placeSeparator];
-# else  // !USE_IPHONE
+# else  // !HAVE_IPHONE
   NSRect rect;
   rect.size.width = rect.size.height = 1;
   rect.origin.x = rect.origin.y = 0;
@@ -2700,11 +3003,11 @@ last_child (NSView *parent)
   [self placeChild:box on:parent];
   [group release];
   [box release];
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 }
 
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 static void
 layout_group (NSView *group, BOOL horiz_p)
 {
@@ -2746,7 +3049,7 @@ layout_group (NSView *group, BOOL horiz_p)
     [kid setFrame:r];
   }
 }
-#endif // !USE_IPHONE
+#endif // !HAVE_IPHONE
 
 
 /* Create some kind of control corresponding to the given XML node.
@@ -2832,7 +3135,7 @@ layout_group (NSView *group, BOOL horiz_p)
 }
 
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
 /* Kludgey magic to make the window enclose the controls we created.
  */
@@ -2973,11 +3276,11 @@ fix_contentview_size (NSView *parent)
     [kid setAutoresizingMask:mask];
   }
 }
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
 
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 static NSView *
 wrap_with_buttons (NSWindow *window, NSView *panel)
 {
@@ -2997,13 +3300,13 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
   rect.origin.x = rect.origin.y = 0;
   rect.size.width = rect.size.height = 10;
   NSButton *reset = [[NSButton alloc] initWithFrame:rect];
-  [reset setTitle:@"Reset to Defaults"];
+  [reset setTitle:NSLocalizedString(@"Reset to Defaults", @"")];
   [reset setBezelStyle:NSRoundedBezelStyle];
   [reset sizeToFit];
 
   rect = [reset frame];
   NSButton *ok = [[NSButton alloc] initWithFrame:rect];
-  [ok setTitle:@"OK"];
+  [ok setTitle:NSLocalizedString(@"OK", @"")];
   [ok setBezelStyle:NSRoundedBezelStyle];
   [ok sizeToFit];
   rect = [bbox frame];
@@ -3012,7 +3315,7 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 
   rect = [ok frame];
   NSButton *cancel = [[NSButton alloc] initWithFrame:rect];
-  [cancel setTitle:@"Cancel"];
+  [cancel setTitle:NSLocalizedString(@"Cancel", @"")];
   [cancel setBezelStyle:NSRoundedBezelStyle];
   [cancel sizeToFit];
   rect.origin.x -= [cancel frame].size.width + 10;
@@ -3089,14 +3392,14 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 
   return pbox;
 }
-#endif // !USE_IPHONE
+#endif // !HAVE_IPHONE
 
 
 /* Iterate over and process the children of the root node of the XML document.
  */
 - (void)traverseTree
 {
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   NSView *parent = [self view];
 # else
   NSWindow *parent = self;
@@ -3107,12 +3410,9 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
     NSAssert (0, @"top level node is not <xscreensaver>");
   }
 
-  saver_name = [self parseXScreenSaverTag: node];
-  saver_name = [saver_name stringByReplacingOccurrencesOfString:@" "
-                           withString:@""];
-  [saver_name retain];
+  saver_title = [[self parseXScreenSaverTag: node] retain];
   
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
   NSRect rect;
   rect.origin.x = rect.origin.y = 0;
@@ -3137,14 +3437,14 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
   [panel release];
   [root release];
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   CGRect r = [parent frame];
   r.size = [[UIScreen mainScreen] bounds].size;
   [parent setFrame:r];
   [self traverseChildren:node on:parent];
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 
@@ -3193,7 +3493,7 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 }
 
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 # ifdef USE_PICKER_VIEW
 
 #pragma mark UIPickerView delegate methods
@@ -3229,8 +3529,14 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
   CGFloat max = 0;
   for (NSArray *a2 in a) {
     NSString *s = [a2 objectAtIndex:0];
-    // #### sizeWithFont deprecated as of iOS 7; use boundingRectWithSize.
-    CGSize r = [s sizeWithFont:f];
+    //CGSize r = [s sizeWithFont:f];
+    CGSize r = pv.frame.size;
+    r.height = 999999;
+    r = [s boundingRectWithSize:r
+                        options:NSStringDrawingUsesLineFragmentOrigin
+                     attributes:@{NSFontAttributeName: f}
+                        context:nil].size;
+
     if (r.width > max) max = r.width;
   }
 
@@ -3267,21 +3573,34 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 {
   [[self navigationItem] 
     setRightBarButtonItem: [[UIBarButtonItem alloc]
-                             initWithTitle: @"Reset to Defaults"
+                             initWithTitle:
+                               NSLocalizedString(@"Reset to Defaults", @"")
                              style: UIBarButtonItemStylePlain
                              target:self
                              action:@selector(resetAction:)]];
-  NSString *s = saver_name;
+  NSString *s = saver_title;
   if ([self view].frame.size.width > 320)
     s = [s stringByAppendingString: @" Settings"];
   [self navigationItem].title = s;
 }
 
 
+# ifndef HAVE_TVOS
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (BOOL)shouldAutorotateToInterfaceOrientation: (UIInterfaceOrientation)o
+{
+  return YES;					/* Deprecated in iOS 6 */
+}
+#pragma clang diagnostic pop
+
+- (BOOL)shouldAutorotate			/* Added in iOS 6 */
 {
   return YES;
 }
+# endif // !HAVE_TVOS
+
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tv {
   // Number of vertically-stacked white boxes.
@@ -3301,7 +3620,7 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 {
   // Titles above each vertically-stacked white box.
 //  if (section == 0)
-//    return [saver_name stringByAppendingString:@" Settings"];
+//    return [saver_title stringByAppendingString:@" Settings"];
   return nil;
 }
 
@@ -3342,6 +3661,15 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
     h = r.size.height;
 # endif // USE_HTML_LABELS
 
+# ifdef USE_PICKER_VIEW
+  } else if ([ctl isKindOfClass:[UIPickerView class]]) {
+    UIPickerView *pv = (UIPickerView *) ctl;
+    NSArray *a = [picker_values objectAtIndex: [pv tag]];
+    int lines = [a count];
+    lines = 3;
+    h = FONT_SIZE * lines + LINE_SPACING * 2;
+# endif
+
   } else {			// Does this ever happen?
     h = FONT_SIZE + LINE_SPACING * 2;
   }
@@ -3377,6 +3705,8 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 }
 
 
+#pragma clang diagnostic push	 /* Deprecated in iOS 8 */
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)o
 {
   [NSTimer scheduledTimerWithTimeInterval: 0
@@ -3385,6 +3715,7 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
            userInfo:nil
            repeats:NO];
 }
+#pragma clang diagnostic pop
 
 
 #ifndef USE_PICKER_VIEW
@@ -3470,6 +3801,7 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 
         CGRect r = [ctl frame];
 
+# ifndef HAVE_TVOS
         if ([ctl isKindOfClass:[UISwitch class]]) {	// Checkboxes.
           r.size.width = 80;  // Magic.
           r.origin.x = right_edge - r.size.width + 30;  // beats me
@@ -3477,7 +3809,9 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
           if (os_version < 7)  // checkboxes were wider on iOS 6.1
             r.origin.x -= 25;
 
-        } else {
+        } else
+# endif // !HAVE_TVOS
+        {
           r.origin.x = left_width;			// Text fields, etc.
           r.size.width = right_edge - r.origin.x;
         }
@@ -3628,7 +3962,7 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 
   return cell;
 }
-# endif  // USE_IPHONE
+# endif  // HAVE_IPHONE
 
 
 /* When this object is instantiated, it parses the XML file and creates
@@ -3636,17 +3970,18 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
    The default size of the view is just big enough to hold them all.
  */
 - (id)initWithXML: (NSData *) xml_data
+        classname: (NSString *) _classname
           options: (const XrmOptionDescRec *) _opts
        controller: (NSUserDefaultsController *) _prefs
  globalController: (NSUserDefaultsController *) _globalPrefs
          defaults: (NSDictionary *) _defs
+      haveUpdater: (BOOL) _haveUpdater
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   self = [super init];
-# else  // !USE_IPHONE
+# else  // !HAVE_IPHONE
   self = [super initWithStyle:UITableViewStyleGrouped];
-  self.title = [saver_name stringByAppendingString:@" Settings"];
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
   if (! self) return 0;
 
   // instance variables
@@ -3654,6 +3989,8 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
   defaultOptions = _defs;
   userDefaultsController   = [_prefs retain];
   globalDefaultsController = [_globalPrefs retain];
+  classname = [_classname retain];
+  haveUpdater = _haveUpdater;
 
   NSXMLParser *xmlDoc = [[NSXMLParser alloc] initWithData:xml_data];
 
@@ -3673,17 +4010,23 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
     return nil;
   }
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   TextModeTransformer *t = [[TextModeTransformer alloc] init];
   [NSValueTransformer setValueTransformer:t
                       forName:@"TextModeTransformer"];
   [t release];
-# endif // USE_IPHONE
+
+  NonNilStringTransformer *t2 = [[NonNilStringTransformer alloc] init];
+  [NSValueTransformer setValueTransformer:t2
+                      forName:@"NonNilStringTransformer"];
+  [t2 release];
+# endif // HAVE_IPHONE
 
   [self traverseTree];
   xml_root = 0;
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
+  self.title = [saver_title stringByAppendingString:@" Settings"];
   [self addResetButton];
 # endif
 
@@ -3693,10 +4036,11 @@ wrap_with_buttons (NSWindow *window, NSView *panel)
 
 - (void) dealloc
 {
-  [saver_name release];
+  [classname release];
+  [saver_title release];
   [userDefaultsController release];
   [globalDefaultsController release];
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   [controls release];
   [pref_keys release];
   [pref_ctls release];

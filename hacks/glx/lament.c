@@ -41,8 +41,6 @@
 
 /* #define DEBUG_MODE LAMENT_LEVIATHAN_COLLAPSE */
 
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 #undef MAX
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #undef MIN
@@ -209,7 +207,7 @@ typedef enum {
   LAMENT_LEVIATHAN_EXPAND,
   LAMENT_LEVIATHAN_UNTWIST,
   LAMENT_LEVIATHAN_UNFADE,
-  LAMENT_LEVIATHAN_UNSPIN,
+  LAMENT_LEVIATHAN_UNSPIN
 
 } lament_type;
 

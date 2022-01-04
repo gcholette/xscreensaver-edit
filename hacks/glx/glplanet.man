@@ -1,6 +1,6 @@
 .TH XScreenSaver 1 "" "X Version 11"
 .SH NAME
-glplanet - rotating 3d texture-mapped planet.
+glplanet \- rotating 3d texture-mapped planet.
 .SH SYNOPSIS
 .B glplanet
 [\-display \fIhost:display.screen\fP]
@@ -10,6 +10,7 @@ glplanet - rotating 3d texture-mapped planet.
 [\-delay \fInumber\fP]
 [\-image \fIfile\fP]
 [\-image2 \fIfile\fP]
+[\-mode \fIstring\fP]
 [\-resolution \fInumber\fP]
 [\-wireframe]
 [\-fps]
@@ -40,6 +41,15 @@ The day texture map to wrap around the planet's surface.
 The night texture map to wrap around the planet's surface.
 The two will be blended together at the dusk terminator.
 .TP 8
+.B \-mode globe
+All is right with the world.
+.TP 8
+.B \-mode equirectangular
+Wat.
+.TP 8
+.B \-mode mercator
+Good day, Sir. I said GOOD DAY.
+.TP 8
 .B \-resolution
 The resolution of the planetary mesh. Default: 128.
 .TP 8
@@ -60,7 +70,7 @@ stored in the RESOURCE_MANAGER property.
 .SH SEE ALSO
 .BR X (1),
 .BR xscreensaver (1)
-.BR dymaxionmap (1)
+.BR dymaxionmap (MANSUFFIX)
 .BR ssystem (1)
 .SH COPYRIGHT
 Copyright \(co 2002-2018 by David Konerding and Jamie Zawinski.

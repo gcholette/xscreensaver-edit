@@ -1,5 +1,5 @@
 /*
- * fliptext, Copyright (c) 2005-2015 Jamie Zawinski <jwz@jwz.org>
+ * fliptext, Copyright (c) 2005-2019 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -10,11 +10,7 @@
  * implied warranty.
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif /* HAVE_CONFIG_H */
-
-#define DEF_FONT       "-*-utopia-bold-r-normal-*-*-720-*-*-*-*-*-*"
+#define DEF_FONT       "sans-serif bold 72"
 #define DEF_COLOR      "#00CCFF"
 
 #define DEFAULTS "*delay:        10000      \n" \
@@ -28,8 +24,6 @@
 
 # define release_fliptext 0
 # define fliptext_handle_event xlockmore_no_events
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #undef BELLRAND
 #define BELLRAND(n) ((frand((n)) + frand((n)) + frand((n))) / 3)
@@ -805,7 +799,7 @@ init_fliptext (ModeInfo *mi)
   MI_INIT(mi, scs);
 
   sc = &scs[MI_SCREEN(mi)];
-  sc->lines = (line **) calloc (max_lines+1, sizeof(char *));
+  sc->lines = (line **) calloc (max_lines+1, sizeof(*sc->lines));
 
   sc->dpy = MI_DISPLAY(mi);
 

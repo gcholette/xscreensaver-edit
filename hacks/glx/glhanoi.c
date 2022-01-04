@@ -60,9 +60,6 @@ enum {
 
 #define MARBLE_TEXTURE_SIZE 256
 
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
-
 #include <math.h>
 #include "xlockmore.h"
 
@@ -1296,7 +1293,7 @@ static void initData(glhcfg *glhanoi)
 		glhanoi->pole[i].size = glhanoi->numberOfDisks;
 	}
 	checkAllocAndExit(
-			!!(glhanoi->diskPos = calloc(glhanoi->numberOfDisks, sizeof(double))),
+			!!(glhanoi->diskPos = calloc(glhanoi->numberOfDisks, sizeof(float))),
 			"diskPos");
 
 	if (glhanoi->trailQSize) {
@@ -1424,13 +1421,14 @@ static GLubyte *makeTexture(glhcfg *glhanoi, int x_size, int y_size, int z_size,
 									   tex_col_t *), tex_col_t * colours)
 {
 	int i, j, k;
-	GLubyte *textureData;
+	GLuint *textureData;
 	GLuint *texturePtr;
 	double x, y, z;
 	double xi, yi, zi;
 
+	/* As we use GL_RGBA format, we must assign 4 bytes per element */
 	if((textureData =
-		calloc(x_size * y_size * z_size, sizeof(GLuint))) == NULL) {
+		calloc(x_size * y_size * z_size, sizeof(*texturePtr))) == NULL) {
 		return NULL;
 	}
 
@@ -1439,7 +1437,7 @@ static GLubyte *makeTexture(glhcfg *glhanoi, int x_size, int y_size, int z_size,
 	zi = 1.0 / z_size;
 
 	z = 0.0;
-	texturePtr = (void *)textureData;
+	texturePtr = textureData;
 	for(k = 0; k < z_size; k++, z += zi) {
 		y = 0.0;
 		for(j = 0; j < y_size; j++, y += yi) {
@@ -1450,7 +1448,7 @@ static GLubyte *makeTexture(glhcfg *glhanoi, int x_size, int y_size, int z_size,
 			}
 		}
 	}
-	return textureData;
+	return (GLubyte *)textureData;
 }
 
 static void freeTexCols(tex_col_t*p)
@@ -1977,14 +1975,12 @@ ENTRYPOINT void draw_glhanoi(ModeInfo * mi)
 	update_glhanoi(glhanoi);
 	updateView(glhanoi);
 
-# ifdef HAVE_MOBILE	/* Keep it the same relative size when rotated. */
     {
-      GLfloat h = MI_HEIGHT(mi) / (GLfloat) MI_WIDTH(mi);
-      int o = (int) current_device_rotation();
-      if (o != 0 && o != 180 && o != -180)
-        glScalef (1/h, 1/h, 1/h);
+      GLfloat s = (MI_WIDTH(mi) < MI_HEIGHT(mi)
+                   ? (MI_WIDTH(mi) / (GLfloat) MI_HEIGHT(mi))
+                   : 1);
+      glScalef (s, s, s);
     }
-# endif
 
 	if(!glhanoi->wire && glhanoi->texture) {
 		glEnable(GL_TEXTURE_2D);

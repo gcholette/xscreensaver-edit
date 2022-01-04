@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml version="1.0" encoding="UTF-8"?>
 
 <screensaver name="klein" _label="Klein" gl="yes">
 
@@ -8,10 +8,10 @@
 
   <hgroup>
     <select id="kleinbottle">
-      <option id="random"         _label="Random shape"/>
-      <option id="figure-8"       _label="Figure 8"       arg-set="-klein-bottle figure-8"/>
-      <option id="squeezed-torus" _label="Squeezed torus" arg-set="-klein-bottle squeezed-torus"/>
-      <option id="lawson"         _label="Lawson"         arg-set="-klein-bottle lawson"/>
+      <option id="random"        _label="Random shape"/>
+      <option id="figure-8"      _label="Figure 8"      arg-set="-klein-bottle figure-8"/>
+      <option id="pinched-torus" _label="Pinched torus" arg-set="-klein-bottle pinched-torus"/>
+      <option id="lawson"        _label="Lawson"        arg-set="-klein-bottle lawson"/>
     </select>
 
     <select id="view-mode">
@@ -41,10 +41,14 @@
 
     <select id="colors">
       <option id="random"   _label="Random coloration"/>
+      <option id="twosided" _label="One-sided"       arg-set="-colors one-sided"/>
       <option id="twosided" _label="Two-sided"       arg-set="-colors two-sided"/>
       <option id="rainbow"  _label="Rainbow colors"  arg-set="-colors rainbow"/>
       <option id="depth"    _label="4d depth colors" arg-set="-colors depth"/>
     </select>
+
+    <boolean id="change-colors" _label="Change colors"
+              arg-set="-change-colors"/>
 
     <select id="projection3d">
       <option id="random"          _label="Random 3D"/>
@@ -107,7 +111,7 @@
 
      <number id="delay" type="slider" arg="-delay %"
              _label="Frame rate" _low-label="Low" _high-label="High"
-             low="0" high="100000" default="10000"
+             low="0" high="100000" default="25000"
              convert="invert"/>
 
      <boolean id="showfps" _label="Show frame rate" arg-set="-fps"/>
@@ -117,7 +121,7 @@
   <xscreensaver-updater />
 
   <_description>
-A Klein bottle is the 4D analog of a moebius strip.
+A Klein bottle is the 4D analog of a möbius strip.
 
 You can walk on the surface of the bottle or rotate it in 4D or walk
 on it while it rotates in 4D.  Inspired by Thomas Banchoff's book

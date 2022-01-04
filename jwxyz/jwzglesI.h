@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2012-2018 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2012-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -118,6 +118,7 @@
 # define GL_VIEWPORT_BIT			0x00000800
 # define GL_INT					0x1404
 # define GL_DOUBLE				0x140A
+# define GL_CONSTANT_ALPHA			0x8003
 
 #endif
 
@@ -173,6 +174,7 @@ extern void jwzgles_glPopAttrib(void);
 extern void jwzgles_glActiveTexture (GLuint);
 extern void jwzgles_glBindTexture (GLuint, GLuint);
 extern void jwzgles_glBlendFunc (GLuint, GLuint);
+extern void jwzgles_glBlendColor (GLfloat, GLfloat, GLfloat, GLfloat);
 extern void jwzgles_glClear (GLuint);
 extern void jwzgles_glClearColor (GLclampf, GLclampf, GLclampf, GLclampf);
 extern void jwzgles_glClearStencil (GLuint);
@@ -182,6 +184,7 @@ extern void jwzgles_glDepthFunc (GLuint);
 extern void jwzgles_glDepthMask (GLuint);
 extern void jwzgles_glDisable (GLuint);
 extern void jwzgles_glDrawArrays (GLuint, GLuint, GLuint);
+extern void jwzgles_glDrawElements (GLenum, GLsizei, GLenum, const GLvoid *);
 extern GLboolean jwzgles_glIsEnabled (GLuint);
 extern void jwzgles_glEnable (GLuint);
 extern void jwzgles_glFrontFace (GLuint);
@@ -204,7 +207,6 @@ extern void jwzgles_glViewport (GLuint, GLuint, GLuint, GLuint);
 extern void jwzgles_glTranslatef (GLfloat, GLfloat, GLfloat);
 extern void jwzgles_glRotatef (GLfloat, GLfloat, GLfloat, GLfloat);
 extern void jwzgles_glRotated (GLdouble, GLdouble x, GLdouble y, GLdouble z);
-extern void jwzgles_glReadBuffer (GLuint);
 extern void jwzgles_glScalef (GLfloat, GLfloat, GLfloat);
 extern void jwzgles_glColor3f (GLfloat, GLfloat, GLfloat);
 extern void jwzgles_glColor4f (GLfloat, GLfloat, GLfloat, GLfloat);

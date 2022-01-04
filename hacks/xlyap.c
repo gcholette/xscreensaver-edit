@@ -40,9 +40,6 @@
 #include "yarandom.h"
 #include "hsv.h"
 
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
-
 #ifndef HAVE_JWXYZ
 # include <X11/cursorfont.h> 
 #endif
@@ -1865,7 +1862,7 @@ xlyap_draw (Display *dpy, Window window, void *closure)
     }
   }
 
-  for (i = 0; i < 1000; i++)
+  for (i = 0; i < 2000; i++)
     if (complyap(st) == TRUE)
       {
         st->run = 0;

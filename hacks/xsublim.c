@@ -84,6 +84,10 @@
 
 
 /* Includes ******************************************************************/
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,6 +111,7 @@
 #include "usleep.h"
 #include "yarandom.h"
 #include "resources.h"
+#include "xft.h"
 #include "font-retry.h"
 #include "vroot.h"
 

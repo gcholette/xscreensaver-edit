@@ -33,6 +33,7 @@
 
 /* #define DEBUG */
 
+#include <assert.h>
 #include <errno.h>		/* for perror() */
 
 #ifdef HAVE_JWXYZ
@@ -42,12 +43,8 @@
 #endif
 
 #include "xshm.h"
+#include "aligned_malloc.h"
 #include "resources.h"		/* for get_string_resource() */
-#include "thread_util.h"        /* for thread_malloc() */
-
-#ifdef DEBUG
-# include <X11/Xmu/Error.h>
-#endif
 
 extern char *progname;
 
@@ -68,7 +65,7 @@ shm_ehandler (Display *dpy, XErrorEvent *error)
 {
   shm_got_x_error = True;
 
-#ifdef DEBUG
+#if 0
   fprintf (stderr, "\n%s: ignoring X error from XSHM:\n", progname);
   XmuPrintDefaultErrorMessage (dpy, error, stderr);
   fprintf (stderr, "\n");
@@ -89,7 +86,7 @@ shm_ehandler (Display *dpy, XErrorEvent *error)
   XSync((DPY), False); 					\
   if (old_handler)					\
     XSetErrorHandler (old_handler);			\
-    old_handler = 0;					\
+  old_handler = 0;					\
 } while(0)
 
 #endif /* HAVE_XSHM_EXTENSION */
@@ -117,8 +114,8 @@ create_fallback (Display *dpy, Visual *visual,
     /* Sometimes the XImage data needs to be aligned, such as for SIMD (SSE2
        in Fireworkx), or multithreading (AnalogTV).
      */
-    int error = thread_malloc ((void **)&image->data, dpy,
-                               image->height * image->bytes_per_line);
+    int error = aligned_malloc ((void **)&image->data, get_cache_line_size(),
+                                image->height * image->bytes_per_line);
     if (error) {
       print_error (error);
       XDestroyImage (image);
@@ -291,19 +288,19 @@ void
 destroy_xshm_image (Display *dpy, XImage *image, XShmSegmentInfo *shm_info)
 {
 #ifdef HAVE_XSHM_EXTENSION
+  Status status;
+
   if (shm_info->shmid == -1) {
 #endif /* HAVE_XSHM_EXTENSION */
 
     /* Don't let XDestroyImage free image->data. */
-    thread_free (image->data);
+    aligned_free (image->data);
     image->data = NULL;
     XDestroyImage (image);
     return;
 
 #ifdef HAVE_XSHM_EXTENSION
   }
-
-  Status status;
 
   CATCH_X_ERROR(dpy);
   status = XShmDetach (dpy, shm_info);
@@ -312,10 +309,10 @@ destroy_xshm_image (Display *dpy, XImage *image, XShmSegmentInfo *shm_info)
     status = False;
   if (!status)
     fprintf (stderr, "%s: XShmDetach failed!\n", progname);
-#ifdef DEBUG
+# ifdef DEBUG
   else
     fprintf (stderr, "%s: XShmDetach(dpy, shm_info) ==> True\n", progname);
-#endif
+# endif
 
   XDestroyImage (image);
   XSync(dpy, False);
@@ -329,10 +326,10 @@ destroy_xshm_image (Display *dpy, XImage *image, XShmSegmentInfo *shm_info)
                (unsigned long) shm_info->shmaddr);
       perror(buf);
     }
-#ifdef DEBUG
+# ifdef DEBUG
   else
     fprintf (stderr, "%s: shmdt(shm_info->shmaddr) ==> 0\n", progname);
-#endif
+# endif
 
   XSync(dpy, False);
 

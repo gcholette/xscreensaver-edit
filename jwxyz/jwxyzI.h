@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 1991-2018 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 1991-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -52,6 +52,7 @@ extern unsigned int jwxyz_drawable_depth (Drawable d);
    meaning of -[UIView contentScaleFactor] on iOS.
  */
 extern float jwxyz_scale (Window main_window);
+extern float jwxyz_font_scale (Window main_window);
 
 extern const char *jwxyz_default_font_family (int require);
 extern void *jwxyz_load_native_font (Window main_window,
@@ -130,7 +131,7 @@ extern void jwxyz_quartz_copy_area (Display *dpy, Drawable src, Drawable dst,
 
 # ifdef JWXYZ_GL
 
-#  if defined(USE_IPHONE)
+#  if defined(HAVE_IPHONE)
 #   include <OpenGLES/ES1/gl.h>
 #  elif defined(HAVE_COCOA)
 #   include <OpenGL/gl.h>
@@ -165,6 +166,7 @@ extern void jwxyz_gl_copy_area_read_tex_image (Display *dpy,
                                                int dst_x, int dst_y);
 extern void jwxyz_gl_copy_area_write_tex_image (Display *dpy, GC gc,
                                                 int src_x, int src_y,
+                                                int src_depth,
                                                 unsigned int width,
                                                 unsigned int height,
                                                 int dst_x, int dst_y);

@@ -1,6 +1,8 @@
 /* Munching Squares and Mismunch
  *
  * Portions copyright 1992-2014 Jamie Zawinski <jwz@jwz.org>
+ * Portions Copyright 1997, Tim Showalter
+ * Portions Copyright 2004 Steven Hazel <sah@thalassocracy.org>
  *
  *   Permission to use, copy, modify, distribute, and sell this
  *   software and its documentation for any purpose is hereby
@@ -10,16 +12,6 @@
  *   representations are made about the suitability of this software
  *   for any purpose.  It is provided "as is" without express or
  *   implied warranty.
- *
- * Portions Copyright 1997, Tim Showalter
- *
- *   Permission is granted to copy, modify, and use this as long
- *   as this notice remains intact.  No warranties are expressed or
- *   implied.  CMU Sucks.
- * 
- * Portions Copyright 2004 Steven Hazel <sah@thalassocracy.org>
- *
- *   (The "mismunch" part).
  * 
  * "munch.c" and "mismunch.c" merged by jwz, 29-Aug-2008.
  *
@@ -72,6 +64,7 @@
  */
 
 #include <math.h>
+#include "pow2.h"
 #include "screenhack.h"
 
 typedef struct _muncher {
@@ -105,20 +98,6 @@ struct state {
 };
 
 
-/*
- * dumb way to get # of digits in number.  Probably faster than actually
- * doing a log and a division, maybe.
- */
-static int dumb_log_2(int k) 
-{
-  int r = -1;
-  while (k > 0) {
-    k >>= 1; r++;
-  }
-  return r;
-}
-
-
 static void calc_logwidths (struct state *st) 
 {
   /* Choose a range of square sizes based on the window size.  We want
@@ -129,9 +108,9 @@ static void calc_logwidths (struct state *st)
 
   if (st->window_height < st->window_width &&
       st->window_width < st->window_height * 5) {
-    st->logmaxwidth = (int)dumb_log_2(st->window_height * 0.8);
+    st->logmaxwidth = (int)i_log2(st->window_height * 0.8);
   } else {
-    st->logmaxwidth = (int)dumb_log_2(st->window_width * 0.8);
+    st->logmaxwidth = (int)i_log2(st->window_width * 0.8);
   }
 
   if (st->logmaxwidth < 2) {

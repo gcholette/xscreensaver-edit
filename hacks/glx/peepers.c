@@ -1,4 +1,4 @@
-/* peepers, Copyright (c) 2018 Jamie Zawinski <jwz@jwz.org>
+/* peepers, Copyright (c) 2018-2019 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -26,9 +26,6 @@
 
 #define DEF_SPEED "1.0"
 #define DEF_MODE  "random"
-
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #undef BELLRAND
 #define BELLRAND(n) ((frand((n)) + frand((n)) + frand((n))) / 3)
@@ -233,10 +230,10 @@ reset_floater (ModeInfo *mi, floater *f)
       p += c[i].pct;
     p = frand(p);
 
-    for (i = 0; i < countof(c); i++)
+    for (i = 0; i < countof(c) - 1; i++)
       {
-        if (t > p) break;
         t += c[i].pct;
+        if (t > p) break;
       }
 
     if (c[i].c == 0xFFAA88)    f->jaundice = 2;
@@ -851,7 +848,7 @@ draw_ball (ModeInfo *mi, component which)
           polys++;
         }
       glEnd();
-      return polys;
+      goto DONE;
     }
 
   for (i = xstart; i <= xstop; i++)
@@ -1009,6 +1006,7 @@ draw_ball (ModeInfo *mi, component which)
   if (!wire)
     glEnd();
 
+ DONE:
   free (stacks);
   free (normals);
 

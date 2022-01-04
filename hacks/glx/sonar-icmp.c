@@ -1,4 +1,4 @@
-/* sonar, Copyright (c) 1998-2018 Jamie Zawinski and Stephen Martin
+/* sonar, Copyright © 1998-2021 Jamie Zawinski and Stephen Martin
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -18,11 +18,15 @@
 
 #undef usleep /* conflicts with unistd.h on OSX */
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
   /* Note: to get this to compile for iPhone, you need to fix Xcode!
      The icmp headers exist for the simulator build environment, but
      not for the real-device build environment.  This appears to 
-     just be an Apple bug, not intentional.
+     just be an Apple bug, not intentional.  But it has existed for
+     many years.
+
+     The "ICMP Sanity Check" build phase in the Xcode project checks
+     this and tells you what to do.
 
      xc=/Applications/Xcode.app/Contents
      for path in    /Developer/Platforms/iPhone*?/Developer/SDKs/?* \
@@ -67,6 +71,9 @@
 # include <errno.h>
 # ifdef HAVE_GETIFADDRS
 #  include <ifaddrs.h>
+# endif
+# ifdef HAVE_LIBCAP
+#  include <sys/capability.h>
 # endif
 #endif /* HAVE_ICMP || HAVE_ICMPHDR */
 
@@ -449,12 +456,13 @@ read_hosts_file (sonar_sensor_data *ssd, const char *filename)
   fp = fopen(filename, "r");
   if (!fp)
     {
-      char buf2[1024];
-      sprintf(buf2, "%s:  %s", progname, filename);
 #ifdef HAVE_JWXYZ
       if (pd->debug_p)  /* on OSX don't syslog this */
 #endif
-        perror (buf2);
+        {
+          char *str_error = strerror(errno);
+          fprintf(stderr, "%s:  %s: %s", progname, filename, str_error);
+        }
       return 0;
     }
 
@@ -936,6 +944,7 @@ send_ping (ping_data *pd, const sonar_bogie *b)
   struct ICMP *icmph;
   const char *token = "org.jwz.xscreensaver.sonar";
   char *host_id;
+  struct timeval tval;
 
   unsigned long pcktsiz = (sizeof(struct ICMP) + sizeof(struct timeval) +
                  sizeof(socklen_t) + pb->addrlen +
@@ -953,12 +962,16 @@ send_ping (ping_data *pd, const sonar_bogie *b)
   ICMP_CHECKSUM(icmph) = 0;
   ICMP_ID(icmph) = pd->pid;
   ICMP_SEQ(icmph) = pd->seq++;
+  /* struct timeval needs alignment, so we first use aligned buffer for
+     gettimeofday() and later copy the result to packet buffer
+   */
 # ifdef GETTIMEOFDAY_TWO_ARGS
-  gettimeofday((struct timeval *) &packet[sizeof(struct ICMP)],
+  gettimeofday((struct timeval *) &tval,
                (struct timezone *) 0);
 # else
-  gettimeofday((struct timeval *) &packet[sizeof(struct ICMP)]);
+  gettimeofday((struct timeval *) &tval);
 # endif
+  memcpy(&packet[sizeof(struct ICMP)], &tval, sizeof tval);
 
   /* We store the sockaddr of the host we're pinging in the packet, and parse
      that out of the return packet later (see get_ping() for why).
@@ -1065,7 +1078,7 @@ get_ping (sonar_sensor_data *ssd)
   int result;
   u_char packet[1024];
   struct timeval now;
-  struct timeval *then;
+  struct timeval then;
   struct ip *ip;
   int iphdrlen;
   struct ICMP *icmph;
@@ -1129,7 +1142,10 @@ get_ping (sonar_sensor_data *ssd)
           ip = (struct ip *) packet;
           iphdrlen = IP_HDRLEN(ip) << 2;
           icmph = (struct ICMP *) &packet[iphdrlen];
-          then  = (struct timeval *) &packet[iphdrlen + sizeof(struct ICMP)];
+           /* struct timeval data in packet is not aligned, move the data to
+              the aligned buffer
+             */
+          memcpy(&then, &packet[iphdrlen + sizeof(struct ICMP)], sizeof then);
 
 
           /* Ignore anything but ICMP Replies */
@@ -1218,7 +1234,7 @@ get_ping (sonar_sensor_data *ssd)
           bl = new;
 
           {
-            double msec = delta(then, &now) / 1000.0;
+            double msec = delta(&then, &now) / 1000.0;
 
             if (pd->times_p)
               {
@@ -1237,7 +1253,7 @@ get_ping (sonar_sensor_data *ssd)
                 if (strlen(s) > 28)
                   {
                     s2 = s + strlen(s) - 28;
-                    strncpy (s2, "...", 3);
+                    memcpy (s2, "...", 3);
                   }
                 fprintf (stdout, 
                          "%3d bytes from %28s: icmp_seq=%-4d time=%s\n",
@@ -1483,8 +1499,13 @@ parse_mode (sonar_sensor_data *ssd, char **error_ret, char **desc_ret,
 
       if (!ping_works_p)
         {
+# ifdef HAVE_LIBCAP
+          *error_ret = strdup ("Sonar must be setuid or libcap to ping!\n"
+                               "Running simulation instead.");
+# else
           *error_ret = strdup ("Sonar must be setuid to ping!\n"
                                "Running simulation instead.");
+# endif
           return 0;
         }
 
@@ -1569,6 +1590,46 @@ parse_mode (sonar_sensor_data *ssd, char **error_ret, char **desc_ret,
 }
 
 
+static Bool
+set_net_raw_capalibity(int enable_p)
+{
+  Bool ret_status = False;
+# ifdef HAVE_LIBCAP
+  cap_t cap_status;
+  cap_value_t cap_value[] = { CAP_NET_RAW, };
+  cap_flag_value_t cap_flag_value;
+  cap_flag_value_t new_value = enable_p ? CAP_SET : CAP_CLEAR;
+
+  cap_status = cap_get_proc();
+  do {
+    cap_flag_value = CAP_CLEAR;
+    if (cap_get_flag (cap_status, CAP_NET_RAW, CAP_EFFECTIVE, &cap_flag_value))
+      break;
+    if (cap_flag_value == new_value)
+      {
+        ret_status = True;
+        break;
+      }
+
+    cap_set_flag (cap_status, CAP_EFFECTIVE, 1, cap_value, new_value);
+    if (!cap_set_proc(cap_status)) 
+      ret_status = True;
+  } while (0);
+
+  if (cap_status) cap_free (cap_status);
+# endif /* HAVE_LIBCAP */
+
+  return ret_status;
+}
+
+static Bool
+set_ping_capability (void)
+{
+  if (geteuid() == 0) return True;
+  return set_net_raw_capalibity (True);
+}
+
+
 sonar_sensor_data *
 sonar_init_ping (Display *dpy, char **error_ret, char **desc_ret,
                  const char *subnet, int timeout,
@@ -1605,16 +1666,33 @@ sonar_init_ping (Display *dpy, char **error_ret, char **desc_ret,
 
   /* Create the ICMP socket.  Do this before dropping privs.
 
-     Raw sockets can only be opened by root (or setuid root), so we
-     only try to do this when the effective uid is 0.
+     Raw sockets can only be opened by root (or setuid root), so we only try
+     to do this when the effective uid is 0.
 
-     We used to just always try, and notice the failure.  But apparently
-     that causes "SELinux" to log spurious warnings when running with the
-     "strict" policy.  So to avoid that, we just don't try unless we
-     know it will work.
+     We used to just always try, and notice the failure.  But apparently that
+     causes "SELinux" to log spurious warnings when running with the "strict"
+     policy.  So to avoid that, we just don't try unless we know it will work.
 
-     On MacOS X, we can avoid the whole problem by using a
-     non-privileged datagram instead of a raw socket.
+     On MacOS X, we can avoid the whole problem by using a non-privileged
+     datagram instead of a raw socket.
+
+     On recent Linux systems (2012-ish?) we can avoid setuid by instead using
+     cap_set_flag(... CAP_NET_RAW). To make that call the executable needs to
+     have "sudo setcap cap_net_raw=p sonar" done to it first.
+
+     Except, it turns out that $MESA_LOADER_DRIVER_OVERRIDE would then let you
+     run arbitrary other programs with access to raw sockets.  It's possible
+     that un-setting $MESA_LOADER_DRIVER_OVERRIDE early in main() would prevent
+     this, but Mesa uses a ton of environment variables, and who knows what
+     other crap is lurking in there.  So that's just great.
+
+     Ironically, being setuid root is *more* secure, as Mesa happens to contain
+     code that says, "Hey, maybe I shouldn't link in arbitrary other .so files
+     when I'm root".
+
+     This trick does not work with $LD_PRELOAD because the kernel checks auxv
+     for AT_SECURE and won't run $LD_PRELOAD if setcap is in use, whereas Mesa
+     only checks geteuid.
    */
   if (global_icmpsock)
     {
@@ -1628,7 +1706,7 @@ sonar_init_ping (Display *dpy, char **error_ret, char **desc_ret,
     {
       socket_initted_p = True;
     }
-  else if (geteuid() == 0 &&
+  else if (set_ping_capability() &&
            (pd->icmpsock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)) >= 0)
     {
       socket_initted_p = True;
@@ -1647,7 +1725,7 @@ sonar_init_ping (Display *dpy, char **error_ret, char **desc_ret,
     fprintf (stderr, "%s: unable to open icmp socket\n", progname);
 
   /* Disavow privs */
-  setuid(getuid());
+  if (setuid(getuid()) == -1) abort();
 
   pd->pid = getpid() & 0xFFFF;
   pd->seq = 0;
@@ -1680,7 +1758,7 @@ sonar_init_ping (Display *dpy, char **error_ret, char **desc_ret,
       if (! *error_ret)
         *error_ret = strdup ("No hosts to ping!\n"
                              "Simulating instead.");
-      if (pd) ping_free_data (ssd, pd);
+      ping_free_data (ssd, pd);
       if (ssd) free (ssd);
       return 0;
     }

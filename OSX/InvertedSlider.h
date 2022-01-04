@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2013 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2006-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -12,7 +12,7 @@
  * the high value is on the left and the low value is on the right.
  */
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 # import <UIKit/UIKit.h>
 # define NSSlider UISlider
 # define NSRect   CGRect
@@ -22,17 +22,25 @@
 # import <Cocoa/Cocoa.h>
 #endif
 
+#ifndef HAVE_TVOS
+
 @interface InvertedSlider : NSSlider
 {
   BOOL inverted;
   BOOL integers;
+  double increment;
 }
+
+- (double) increment;
+- (void) setIncrement:(double)v;
 
 - (id) initWithFrame:(NSRect)r inverted:(BOOL)_inv integers:(BOOL)_int;
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 - (double) transformedValue;
 - (void) setTransformedValue:(double)v;
 # endif
 
 @end
+
+#endif // !HAVE_TVOS

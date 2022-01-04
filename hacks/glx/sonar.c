@@ -1,4 +1,4 @@
-/* sonar, Copyright (c) 1998-2018 Jamie Zawinski and Stephen Martin
+/* sonar, Copyright (c) 1998-2020 Jamie Zawinski and Stephen Martin
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -51,7 +51,7 @@
  *   - plot IM contacts or Facebook friends and their last-activity times.
  */
 
-#define DEF_FONT "-*-courier-bold-r-normal-*-*-480-*-*-*-*-iso8859-1"
+#define DEF_FONT	 "monospace bold 48"
 #define DEF_SPEED        "1.0"
 #define DEF_SWEEP_SIZE   "0.3"
 #define DEF_FONT_SIZE    "12"
@@ -77,8 +77,6 @@
 
 
 # define release_sonar 0
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>   /* for setuid() */
@@ -439,7 +437,12 @@ draw_text (ModeInfo *mi, const char *string, GLfloat r, GLfloat th,
 
   free (string2);
 
-  if (! wire) glEnable (GL_DEPTH_TEST);
+  if (! wire)
+    {
+      glEnable (GL_DEPTH_TEST);
+      glEnable (GL_LIGHTING);
+      glEnable (GL_BLEND);
+    }
 
   return polys;
 }
@@ -934,8 +937,9 @@ init_sensor (ModeInfo *mi)
     sp->ssd = sonar_init_ping (MI_DISPLAY (mi), &sp->error, &sp->desc,
                                ping_arg, ping_timeout, resolve_p, times_p,
                                debug_p);
-  else
-    setuid(getuid()); /* Disavow privs if not pinging. */
+
+  /* Might have done this already, but disavow in simulation mode too. */
+  if (setuid(getuid()) == -1) abort();
 
   sp->start_time = double_time ();  /* for error message timing */
 

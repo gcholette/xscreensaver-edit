@@ -131,13 +131,11 @@
 			"*count:	200	\n" \
 			"*cycles:	1000	\n" \
 			"*ncolors:	32	\n" \
-             "*titleFont:  -*-helvetica-bold-r-normal-*-*-180-*-*-*-*-*-*\n" \
+                        "*titleFont:    sans-serif bold 18\n" \
 			"*showFPS:	False	\n" \
 			"*wireframe:	False	\n" \
 
 # define release_juggle 0
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #include "xlockmore.h"
 #include "sphere.h"
@@ -2995,10 +2993,12 @@ draw_juggle (ModeInfo *mi)
 	}
   }
 
+#ifndef HAVE_ANDROID   /* Doesn't work -- causes whole scene to be black */
   glColor3f (1, 1, 0);
   print_texture_label (mi->dpy, sp->font_data,
                        mi->xgwa.width, mi->xgwa.height,
                        1, sp->pattern);
+#endif
 
 #ifdef MEMTEST
   if((int)(sp->time/10) % 1000 == 0)

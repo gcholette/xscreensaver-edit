@@ -17,7 +17,6 @@
 #include "screenhack.h"
 #include "ximage-loader.h"
 #include "textclient.h"
-#include "xft.h"
 
 #define font_height(font) (font->ascent + font->descent)
 
@@ -120,9 +119,9 @@ init_images (struct state *st)
   PM *images[8];
   struct { const unsigned char *png; unsigned long size; } bits[8];
   XWindowAttributes xgwa;
+  int i = 0;
   XGetWindowAttributes (st->dpy, st->window, &xgwa);
 
-  int i = 0;
   images[i++] = &st->left1;
   images[i++] = &st->left2;
   images[i++] = &st->right1;
@@ -405,8 +404,7 @@ talk (struct state *st, int force_erase)
         XGlyphInfo extents;
 
 	total = strlen (st->words);
-	strncpy (args[0], st->words, LINELEN);
-	args[0][LINELEN - 1] = 0;
+	sprintf(args[0], "%.*s", LINELEN - 1, st->words);
         XftTextExtentsUtf8 (st->dpy, st->xftfont, 
                             (FcChar8 *) st->words, total,
                             &extents);
@@ -430,8 +428,8 @@ talk (struct state *st, int force_erase)
 
 	  total += p2 - p;	/* total chars; count to determine reading
 				 * time */
-	  (void) strncpy(args[height], p, LINELEN);
-	  args[height][LINELEN - 1] = 0;
+	  sprintf(args[height], "%.*s", LINELEN - 1, p);
+
 	  if (height == MAXLINES - 1)
 	    {
 	      /* puts("Message too long!"); */
@@ -563,7 +561,7 @@ static const char *noseguy_defaults [] = {
   "*fpsSolid:	 true",
   "*program:	 xscreensaver-text",
   "*usePty:      False",
-  ".font:	 -*-helvetica-medium-r-*-*-*-140-*-*-*-*-*-*",
+  ".font:	 sans-serif 14",
   0
 };
 
@@ -606,11 +604,12 @@ noseguy_init (Display *d, Window w)
 
   init_images(st);
 
-  st->xftfont = XftFontOpenXlfd (st->dpy, screen_number (xgwa.screen),
-                                 fontname);
+  st->xftfont = load_xft_font_retry (st->dpy, screen_number (xgwa.screen),
+                                     fontname);
   free (fontname);
 
   cname = get_string_resource (st->dpy, "textForeground", "Foreground");
+  if (!cname) cname = strdup ("black");
   XftColorAllocName (st->dpy, xgwa.visual, xgwa.colormap,
                      cname, &st->xftcolor);
   free (cname);

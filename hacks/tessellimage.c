@@ -17,9 +17,6 @@
 # include <X11/keysymdef.h>
 #endif
 
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
-
 struct state {
   Display *dpy;
   Window window;
@@ -364,7 +361,7 @@ analyze (struct state *st)
     for (x = 0; x < st->delta->width; x++)
       {
         unsigned long p = XGetPixel (st->delta, x, y);
-        if (p > sizeof(histo)) abort();
+        if (p > countof(histo)) abort();
         histo[p]++;
       }
 

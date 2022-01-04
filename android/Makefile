@@ -1,4 +1,5 @@
 # XScreenSaver for Android
+# The rest of this Makefile is in xscreensaver/jni/Android.mk
 
 export TERM=dumb
 GRADLE = ./gradlew
@@ -6,10 +7,30 @@ GRADLE = ./gradlew
 default:: debug
 all:: release
 
-clean::
-	$(GRADLE) clean
+# Your sdk.dir and ndk.dir might go in here; gradle wants the file to exist.
+local.properties:
+	touch local.properties
 
-distdepend::
+clean::
+	rm -rf .gradle
+	rm -rf xscreensaver/.idea
+	rm -f  android.iml
+	rm -rf build
+	rm -rf gen
+	rm -rf xscreensaver/build
+	rm -rf xscreensaver/libs
+	rm -rf xscreensaver/obj
+	rm -rf xscreensaver/res/values
+	rm -rf xscreensaver/res/xml
+	rm -rf xscreensaver/src/org/jwz/xscreensaver/gen
+	rm -f  xscreensaver/AndroidManifest.xml
+	rm -f  GLWallpaperService/build
+
+
+# "make clean" should not require a functional gradle.
+#	$(GRADLE) clean
+
+distdepend:: local.properties
 
 # Set this to the set of platforms you want to compile for in debug mode.
 # E.g., if you are running an x86 emulator, there's no point in compiling
@@ -40,12 +61,16 @@ export ANDROID_HACKS=		\
 	abstractile		\
 	anemone			\
 	anemotaxis		\
+	antinspect		\
 	antmaze			\
 	antspotlight		\
 	apollonian		\
 	atlantis		\
 	attraction		\
 	atunnel			\
+	barcode			\
+	beats			\
+	binaryhorizon		\
 	binaryring		\
 	blaster			\
 	blinkbox		\
@@ -60,6 +85,7 @@ export ANDROID_HACKS=		\
 	bsod			\
 	bumps			\
 	cage			\
+	carousel		\
 	ccurve			\
 	celtic			\
 	circuit			\
@@ -68,6 +94,7 @@ export ANDROID_HACKS=		\
 	companioncube		\
 	compass			\
 	coral			\
+	covid19			\
 	crackberg		\
 	crumbler		\
 	crystal			\
@@ -82,6 +109,7 @@ export ANDROID_HACKS=		\
 	dangerball		\
 	decayscreen		\
 	deco			\
+	deepstars		\
 	deluxe			\
 	demon			\
 	discoball		\
@@ -96,6 +124,7 @@ export ANDROID_HACKS=		\
 	epicycle		\
 	eruption		\
 	esper			\
+	etruscanvenus		\
 	euler2d			\
 	fadeplot		\
 	fiberlamp		\
@@ -104,15 +133,18 @@ export ANDROID_HACKS=		\
 	flame			\
 	flipflop		\
 	flipscreen3d		\
+	fliptext		\
 	flow			\
 	fluidballs		\
 	flyingtoasters		\
+	fontglide		\
 	fuzzyflakes		\
 	galaxy			\
 	gears			\
 	geodesic		\
 	geodesicgears		\
 	gflux			\
+	gibson			\
 	glblur			\
 	glcells			\
 	gleidescope		\
@@ -126,9 +158,12 @@ export ANDROID_HACKS=		\
 	gltext			\
 	goop			\
 	grav			\
+	gravitywell		\
 	greynetic		\
+	halftone		\
 	halo			\
 	handsy			\
+	headroom		\
 	helix			\
 	hexadrop		\
 	hexstrut		\
@@ -143,6 +178,7 @@ export ANDROID_HACKS=		\
 	intermomentary		\
 	jigglypuff		\
 	jigsaw			\
+	juggler3d		\
 	julia			\
 	kaleidescope		\
 	kaleidocycle		\
@@ -152,6 +188,7 @@ export ANDROID_HACKS=		\
 	lavalite		\
 	loop			\
 	m6502			\
+	marbling		\
 	maze			\
 	maze3d			\
 	memscroller		\
@@ -162,6 +199,7 @@ export ANDROID_HACKS=		\
 	moebiusgears		\
 	moire			\
 	moire2			\
+	molecule		\
 	morph3d			\
 	mountain		\
 	munch			\
@@ -172,9 +210,11 @@ export ANDROID_HACKS=		\
 	penetrate		\
 	penrose			\
 	petri			\
+	photopile		\
 	piecewise		\
 	pinion			\
 	pipes			\
+	polyominoes		\
 	polytopes		\
 	pong			\
 	popsquares		\
@@ -195,18 +235,21 @@ export ANDROID_HACKS=		\
 	rubik			\
 	rubikblocks		\
 	sballs			\
+	scooter			\
 	shadebobs		\
 	sierpinski		\
 	sierpinski3d		\
 	skytentacles		\
 	slidescreen		\
 	slip			\
+	sphereeversion		\
 	spheremonics		\
 	splitflap		\
 	splodesic		\
 	spotlight		\
 	squiral			\
 	stairs			\
+	starwars		\
 	stonerview		\
 	strange			\
 	substrate		\
@@ -222,6 +265,7 @@ export ANDROID_HACKS=		\
 	tronbit			\
 	truchet			\
 	twang			\
+	unicrud			\
 	unknownpleasures	\
 	vermiculate		\
 	vfeedback		\
@@ -244,24 +288,11 @@ export ANDROID_HACKS=		\
 # These don't work well enough to turn on by default:
 #
 ANDROID_TODO=			\
-	antinspect		\
-	barcode			\
-	carousel		\
-	fliptext		\
-	fontglide		\
-	halftone		\
-	juggler3d		\
-	molecule		\
 	pedal			\
 	phosphor		\
-	photopile		\
-	polyominoes		\
 	qix			\
 	speedmine		\
 	starfish		\
-	starwars		\
-	testx11			\
-	unicrud			\
 
 
 # Download and resize images from jwz.org.
@@ -271,7 +302,12 @@ ANDROID_TODO=			\
 # Android actually wants these to be 160x160 but our source is 200x150.
 
 URL = https://www.jwz.org/xscreensaver/screenshots/
-WGET = wget -q -U xscreensaver-build-android
+
+# I find wget easier to deal with, but curl is usually installed by default.
+#WGET = wget -q -U xscreensaver-build-android --content-on-error=0 -O-
+WGET = curl -s -A xscreensaver-build-android -f
+
+# ImageMagick isn't installed by default, but neither is anything similar.
 CVT  = -thumbnail '150x150^' -gravity center -extent 150x150 \
      \( +clone  -alpha extract \
         -draw 'fill black polygon 0,0 0,15 15,0 fill white circle 15,15 15,0' \
@@ -285,13 +321,15 @@ CVT  = -thumbnail '150x150^' -gravity center -extent 150x150 \
 
 # If we are making the m6502 hack, create the header file for Android
 m6502.h::
-	@for h in $(ANDROID_HACKS) ; do \
-		if [ $${h} = "m6502" ] ; then \
-			echo "Making $${h} header ..."; \
-			../hacks/m6502.sh ../hacks/m6502.h ../hacks/images/m6502/*.asm ; \
-			echo "Made $${h} header"; \
-		fi; \
-	done
+	../hacks/m6502.sh ../hacks/m6502.h ../hacks/images/m6502/*.asm
+
+molecules.h::
+	cd ../hacks/glx && \
+	./molecules.sh molecules.h ../images/molecules/*.pdb
+
+images_png_h:
+	cd ../hacks/images && make
+
 
 xscreensaver/res/drawable/%.png:
 	@\
@@ -302,7 +340,7 @@ xscreensaver/res/drawable/%.png:
 	URL="$(URL)$$FILE1" ;						\
 	echo "converting $$URL..." ;					\
 	rm -f "$$FILE2" ;						\
-	$(WGET) -O- "$$URL" |						\
+	$(WGET) "$$URL" |						\
 	convert jpg:- $(CVT) "$$FILE2" ;				\
 	if [ ! -s "$$FILE2" ]; then					\
 	  echo "$$FILE2 failed" >&2 ;					\
@@ -321,12 +359,13 @@ clean_thumbs::
 	done
 
 distclean:: clean_thumbs clean
+	rm -rf .gradle
 
 
 EXTRA_TARFILES = xscreensaver/res/drawable/thumbnail.png \
 
-echo_tarfiles:
-	@FILES=`find . $(EXTRA_TARFILES) \( \(	\
+list_tarfiles:
+	@find . $(EXTRA_TARFILES) \( \(		\
 		   -name .DS_Store		\
 		-o -name '*~'			\
 		-o -name '*.jks'		\
@@ -335,32 +374,31 @@ echo_tarfiles:
 		-o -name '*_settings.xml'	\
 		-o -name '*_wallpaper.xml'	\
 		-o -name AndroidManifest.xml	\
-		-o -name strings.xml		\
-		-o -name settings.xml		\
-		-o -name attrs.xml		\
 		-o -name .gitignore		\
 		-o -name .gradle		\
-		-o -name drawable		\
+		-o -name .idea			\
+		-o -name attrs.xml		\
 		-o -name build			\
+		-o -name caches			\
+		-o -name drawable		\
 		-o -name gen			\
 		-o -name libs			\
+		-o -name local.properties	\
 		-o -name obj			\
+		-o -name settings.xml		\
+		-o -name strings.xml		\
 		\) -prune \)			\
 		-o \( \( -type f -o -type l \)	\
 		      -print \)			\
 		| sed 's@^\./@@' 		\
-		| sort` ;			\
-	echo $$FILES
-
-images_png_h:
-	cd ../hacks/images && $(MAKE)
+		| sort
 
 run_check::
 	../hacks/check-configs.pl --build-android $(ANDROID_HACKS)
 
-debug:: m6502.h run_check images_png_h
+debug::   local.properties m6502.h molecules.h run_check images_png_h
 	$(GRADLE) assembleDebug
-release:: m6502.h run_check images_png_h
+release:: local.properties m6502.h molecules.h run_check images_png_h
 	export APP_ABI=all ; \
 	$(GRADLE) assembleRelease
 
@@ -378,10 +416,12 @@ APK_SIGNED    = $(APK_DIR)xscreensaver-release.apk
   TOOLDIR = $(shell ls -d $$HOME/Library/Android/sdk/build-tools/* | tail -1)
  ZIPALIGN = $(TOOLDIR)/zipalign
 JARSIGNER = jarsigner
+APKSIGNER = $(TOOLDIR)/apksigner
 
-sign_release::
+sign_release_OLD::
 	cp -p $(APK_UNSIGNED) $(APK_UNALIGNED)
 	$(JARSIGNER) -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+		     -tsa http://timestamp.comodoca.com/rfc3161 \
 		     -keystore $(KEYSTORE) $(APK_UNALIGNED) xscreensaver
 	rm -f $(APK_SIGNED)
 	$(ZIPALIGN) -v 4 $(APK_UNALIGNED) $(APK_SIGNED)
@@ -389,10 +429,21 @@ sign_release::
 	$(JARSIGNER) -verify -verbose -certs $(APK_SIGNED)
 	@ls -lF $(APK_SIGNED)
 
+sign_release::
+	rm -f $(APK_UNALIGNED)
+	rm -f $(APK_SIGNED)
+	$(ZIPALIGN) -v 4 $(APK_UNSIGNED) $(APK_SIGNED)
+	$(APKSIGNER) sign --ks $(KEYSTORE) $(APK_SIGNED)
+	$(APKSIGNER) verify $(APK_SIGNED)
+	@ls -lF $(APK_SIGNED)
+	stty -echo
+
 apk:: release
 	@\
-  VERS=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. ]*\).*/\1/p' ../utils/version.h` ; \
-  HEAD="xscreensaver-$$VERS" ;						      \
+  SRC=../utils/version.h ;						    \
+  VERS=`sed -n 's/[^0-9]*\([0-9]\.[0-9][^. \"]*\).*/\1/p' < $$SRC |	    \
+	 head -1`;							    \
+  HEAD="xscreensaver-$$VERS" ;						    \
   if [ ! -s $(APK_SIGNED) -o $(APK_UNSIGNED) -nt $(APK_SIGNED) ]; then	\
     $(MAKE) sign_release ;						\
   fi ;									\

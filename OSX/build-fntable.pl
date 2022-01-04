@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w
-# Copyright © 2012-2018 Jamie Zawinski <jwz@jwz.org>
+# Copyright © 2012-2021 Jamie Zawinski <jwz@jwz.org>
 #
 # Permission to use, copy, modify, distribute, and sell this software and its
 # documentation for any purpose is hereby granted without fee, provided that
@@ -23,7 +23,7 @@ require 5;
 use strict;
 
 my $progname = $0; $progname =~ s@.*/@@g;
-my ($version) = ('$Revision: 1.6 $' =~ m/\s(\d[.\d]+)\s/s);
+my ($version) = ('$Revision: 1.12 $' =~ m/\s(\d[.\d]+)\s/s);
 
 my $verbose = 1;
 
@@ -31,62 +31,66 @@ my $verbose = 1;
 #
 my %disable = (
    'extrusion'		=> 1,
+   'flurry'		=> 1,
    'glitchpeg'		=> 1,
    'lcdscrub'		=> 1,
    'lockward'		=> 1,
    'webcollage'		=> 1,
    'testx11'		=> 1,
+   'covid19'		=> 1,  # Fuck you, Apple.
+  #'co____9'		=> 1,  # Double-fuck you.
+   'xscreensaver-getimage' => 1,
   );
 
-# Parse the RETIRED_EXES variable from the Makefiles to populate %disable.
-# Duplicated in ../hacks/munge-ad.pl.
+# Parse specified variables from a Makefile.
+# ../hacks/munge-ad.pl also parses Makefiles.
 #
-sub parse_makefiles() {
-  foreach my $mf ( "../hacks/Makefile.in", "../hacks/glx/Makefile.in" ) {
-    open (my $in, '<', $mf) || error ("$mf: $!");
-    print STDERR "$progname: reading $mf\n" if ($verbose > 1);
-    local $/ = undef;  # read entire file
-    my $body = <$in>;
-    close $in;
+sub parse_makefile_vars($@)
+{
+  my ($mf, @vars) = @_;
 
-    $body =~ s/\\\n//gs;
-    my ($var)  = ($body =~ m/^RETIRED_EXES\s*=\s*(.*)$/mi);
-    my ($var2) = ($body =~ m/^RETIRED_GL_EXES\s*=\s*(.*)$/mi);
-    error ("no RETIRED_EXES in $mf") unless $var;
-    $var .= " $var2" if $var2;
-    foreach my $hack (split (/\s+/, $var)) {
-      $disable{$hack} = 2;
+  open (my $in, '<:utf8', $mf) || error ("$mf: $!");
+  print STDERR "$progname: reading $mf\n" if ($verbose > 1);
+  local $/ = undef;  # read entire file
+  my $body = <$in>;
+  close $in;
+
+  my %vars = map { $_ => 1 } @vars;
+  my %result;
+  while ($body =~ /^([^:#=\s]+)\s*=\s*((?:\\\n|.)*)/mg)
+  {
+    my ($key, $value) = ($1, $2);
+    if (!%vars || $vars{$key}) {
+      $value =~ s/\\\n/ /g;
+      $result{$key} = $value;
     }
   }
+  return \%result;
 }
 
 
 sub build_h($) {
   my ($outfile) = @_;
 
-  parse_makefiles();
-
-  my @schemes = glob('xscreensaver.xcodeproj/xcuserdata/' .
-                     '*.xcuserdatad/xcschemes/*.xcscheme');
-  error ("no scheme files") unless (@schemes);
-
   my %names = ();
 
-  foreach my $s (@schemes) {
-    open (my $in, '<', $s) || error ("$s: $!");
-    local $/ = undef;  # read entire file
-    my $body = <$in>;
-    close $in;
-    my ($name) = ($body =~ m@BuildableName *= *"([^\"<>]+?)\.saver"@s);
-    next unless $name;
-    $name = lc($name);
-    if ($disable{$name}) {
-      print STDERR "$progname: skipping $name\n" if ($verbose > 1);
-      next;
+  foreach my $var (
+    (values %{ parse_makefile_vars ('../hacks/Makefile.in', 'EXES') }),
+    (values %{ parse_makefile_vars ('../hacks/glx/Makefile.in', 'GL_EXES',
+                                 'SUID_EXES') })) {
+    $var =~ s/covid19/co____9/gs;
+    foreach my $name (split (/\s+/, $var)) {
+      if ($name =~ /@/ || $disable{$name}) {
+        print STDERR "$progname: skipping $name\n" if ($verbose > 1);
+        next;
+      }
+      $name =~ s/-//g;
+      print STDERR "$progname: found $name\n" if ($verbose > 1);
+      $names{$name} = 1;
     }
-    print STDERR "$progname: found $name\n" if ($verbose > 1);
-    $names{$name} = 1;
   }
+
+  $names{'dnalogo'} = 1;  # Not listed in GL_EXES
 
   my @names = sort (keys %names);
   error ("too few names") if (@names < 100);
@@ -111,27 +115,35 @@ sub build_h($) {
 
   sub line($$) {
     my ($s, $suf) = @_;
-    return "\t[NSValue valueWithPointer:&${s}_${suf}], @\"${s}\",\n";
+
+    my $xml_file = "../hacks/config/$s.xml";
+    open (my $in, '<:utf8', $xml_file) || error ("$xml_file: $!");
+    local $/ = undef;  # read entire file
+    my $body = <$in>;
+    close $in;
+    my ($title) = ($body =~ m@<screensaver[^<>]*?[ \t]_label=\"([^\"]+)\"@m);
+    error ("$xml_file: no title") unless $title;
+
+    return "\t@\"${title}\":\t[NSValue valueWithPointer:&${s}_${suf}],\n";
   }
 
   $body .= ("\n\n" .
-            "NSDictionary *make_function_table_dict(void)\n{\n" .
-            "  return\n    [NSDictionary dictionaryWithObjectsAndKeys:\n" .
-            "\n" .
+            "NSDictionary *make_function_table_dict(void) {\n" .
+            "  return \@{\n" .
             "#if defined(APPLE2_ONLY)\n" .
-            " " . line('apple2', $suf) .
+              line('apple2', $suf) .
             "#elif defined(PHOSPHOR_ONLY)\n" .
-            " " . line('phosphor', $suf) .
+              line('phosphor', $suf) .
             "#elif defined(TESTX11_ONLY)\n" .
-            " " . line('testx11', $suf) .
+              line('testx11', $suf) .
             "#else\n");
   foreach my $s (@names) { $body .= line($s, $suf); }
   $body .= ("#endif\n" .
-            "\tnil];\n" .
+            "\t};\n" .
             "}\n\n");
 
   my $obody = '';
-  if (open (my $in, '<', $outfile)) {
+  if (open (my $in, '<:utf8', $outfile)) {
     local $/ = undef;  # read entire file
     $obody = <$in>;
     close $in;
@@ -145,7 +157,7 @@ sub build_h($) {
     print STDERR "$progname: $outfile: unchanged\n" if ($verbose > 1);
   } else {
     my $file_tmp = "$outfile.tmp";
-    open (my $out, '>', $file_tmp) || error ("$file_tmp: $!");
+    open (my $out, '>:utf8', $file_tmp) || error ("$file_tmp: $!");
     print $out $body || error ("$file_tmp: $!");
     close $out || error ("$file_tmp: $!");
 

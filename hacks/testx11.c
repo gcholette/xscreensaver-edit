@@ -33,8 +33,6 @@
 # define jwxyz_assert_display(dpy)
 #endif
 
-#define countof(a) (sizeof(a) / sizeof(*(a)))
-
 static const char *testx11_defaults [] = {
   ".background: #a020f0", /* purple */
   ".foreground: white",
@@ -808,6 +806,7 @@ testx11_draw (Display *dpy, Window win, void *st_raw)
 
     /* X.org isn't making a whole lot of sense here. */
 
+    {
     Bool use_copy = (st->frame / 20) & 1;
 
     {
@@ -842,7 +841,7 @@ testx11_draw (Display *dpy, Window win, void *st_raw)
        */
       XCopyArea (st->dpy, st->copy_pix64, t, gc, 32, 32, 128, 64, 0, h - 64);
     }
-
+    }
     break;
 
   case mode_preserve:

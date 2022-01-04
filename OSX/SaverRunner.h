@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2016 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright (c) 2006-2020 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -9,7 +9,7 @@
  * implied warranty.
  */
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 # import <Foundation/Foundation.h>
 # import <UIKit/UIKit.h>
 # import <OpenGLES/EAGL.h>
@@ -33,56 +33,45 @@
 
 #import "XScreenSaverView.h"
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 
 @class SaverRunner;
 
 @interface SaverViewController : UIViewController
 {
   SaverRunner *_parent;
-  NSString *_saverName;
+  NSString *_saver_title;
   XScreenSaverView *_saverView;
-
-  /* When a the SaverViewController is presented, iOS automatically changes
-     the status bar orientation. (And, by extension, the notification center
-     orientation.) But there's no willPresentAsModal: event for a
-     UIViewController so that it knows when this is going to happen, and the
-     other event handlers occur after the status bar is changed. So save the
-     orientation just before the view controller is modal-presented, and
-     restore the proper status bar orientation just before the saverView is
-     created so it can pick it up in didRotate:. */
-  // UIInterfaceOrientation _storedOrientation;
-
   BOOL _showAboutBox;
   UIView *aboutBox;
   NSTimer *splashTimer;
 }
 
-@property(nonatomic, retain) NSString *saverName;
+@property(nonatomic, retain) NSString *saver_title;
 
 @end
 
 #endif
 
 @interface SaverRunner : NSObject
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   <XScreenSaverViewDelegate>
 # else
   <NSWindowDelegate>
 # endif
 {
-  NSString *saverName;		// the one currently loaded
-  NSArray  *saverNames;		// Names of available savers
+  NSString *saver_title;	// Display name of currently loaded
+  NSDictionary *saverNames;	// Display and bundle names of available savers
   NSString *saverDir;		// Where we find saver bundles
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
   NSBundle *saverBundle;
   NSArray  *windows;
   IBOutlet NSMenu *menubar;
   NSTimer *anim_timer;
 
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
 
   UINavigationController *rotating_nav;		// Hierarchy 1 (UI)
   IBOutlet UIWindow *window;
@@ -92,7 +81,7 @@
 
   UIImage *saved_screenshot;
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 }
 
 - (XScreenSaverView *) newSaverView: (NSString *) module
@@ -100,12 +89,12 @@
 - (void) loadSaver: (NSString *)name;
 - (void) selectedSaverDidChange:(NSDictionary *)change;
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 - (void) openPreferences: (id)sender;
-#else  // USE_IPHONE
+#else  // HAVE_IPHONE
 - (UIImage *) screenshot;
 - (NSString *) makeDesc:(NSString *)saver
                yearOnly:(BOOL) yearp;
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 @end

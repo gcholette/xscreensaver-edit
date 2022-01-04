@@ -1,4 +1,4 @@
-/* filmleader, Copyright (c) 2018 Jamie Zawinski <jwz@jwz.org>
+/* filmleader, Copyright (c) 2018-2019 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -11,19 +11,10 @@
  * Simulate an SMPTE Universal Film Leader playing on an analog television.
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif /* HAVE_CONFIG_H */
-
-#include "xft.h" /* before screenhack.h */
-
 #include "screenhack.h"
 #include "analogtv.h"
 
 #include <time.h>
-
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 struct state {
   Display *dpy;
@@ -126,11 +117,13 @@ filmleader_init (Display *dpy, Window window)
                                         "traceColor", "Foreground");
 
   s = get_string_resource (dpy, "textColor", "Foreground");
+  if (!s) s = strdup ("white");
   XftColorAllocName (dpy, st->xgwa.visual, st->xgwa.colormap, s,
                      &st->xft_text_color_1);
-  if (s) free (s);
+  free (s);
 
   s = get_string_resource (dpy, "textBackground", "Background");
+  if (!s) s = strdup ("black");
   XftColorAllocName (dpy, st->xgwa.visual, st->xgwa.colormap, s,
                      &st->xft_text_color_2);
   if (s) free (s);
@@ -169,14 +162,6 @@ filmleader_draw (Display *dpy, Window window, void *closure)
   int ivalue = st->value;
   XftFont *xftfont;
   XftColor *xftcolor;
-
-  /* You may ask, why use Xft for this instead of the much simpler XDrawString?
-     Well, for some reason, XLoadQueryFont is giving me horribly-scaled bitmap
-     fonts, but Xft works properly. So perhaps in This Modern World, if one
-     expects large fonts to work, one must use Xft instead of Xlib?
-
-     Everything is terrible.
-   */
 
   const struct { double t; int k, f; const char * const s[4]; } blurbs[] = {
     {  9.1, 3, 1, { "PICTURE", "  START", 0, 0 }},
@@ -223,10 +208,10 @@ filmleader_draw (Display *dpy, Window window, void *closure)
           XftTextExtentsUtf8 (dpy, xftfont, (FcChar8 *)
                               blurbs[i].s[0], strlen(blurbs[i].s[0]),
                               &extents);
-          lbearing = -extents.x;
+          /* lbearing = -extents.x; */
           rbearing = extents.width - extents.x;
           ascent   = extents.y;
-          descent  = extents.height - extents.y;
+          /* descent  = extents.height - extents.y; */
 
           x = (st->w - rbearing) / 2;
           y = st->h * 0.1 + ascent;
@@ -245,10 +230,10 @@ filmleader_draw (Display *dpy, Window window, void *closure)
                   XftTextExtentsUtf8 (dpy, xftfont, (FcChar8 *)
                                       blurbs[i].s[0], strlen(blurbs[i].s[j]),
                                       &extents);
-                  lbearing = -extents.x;
-                  rbearing = extents.width - extents.x;
-                  ascent   = extents.y;
-                  descent  = extents.height - extents.y;
+                  /* lbearing = -extents.x; */
+                  /* rbearing = extents.width - extents.x; */
+                  /* ascent   = extents.y; */
+                  /* descent  = extents.height - extents.y; */
                 }
             }
 
@@ -360,7 +345,7 @@ filmleader_draw (Display *dpy, Window window, void *closure)
       lbearing = -extents.x;
       rbearing = extents.width - extents.x;
       ascent   = extents.y;
-      descent  = extents.height - extents.y;
+      /* descent  = extents.height - extents.y; */
 
       x = st->w * 0.1;
       y = st->h * 0.1 + ascent;
@@ -377,8 +362,8 @@ filmleader_draw (Display *dpy, Window window, void *closure)
       XftTextExtentsUtf8 (dpy, xftfont, (FcChar8 *) s, strlen(s), &extents);
       lbearing = -extents.x;
       rbearing = extents.width - extents.x;
-      ascent   = extents.y;
-      descent  = extents.height - extents.y;
+      /* ascent   = extents.y; */
+      /* descent  = extents.height - extents.y; */
 
       x = st->w * 0.1;
       y = st->h * 0.95;
@@ -546,23 +531,23 @@ static const char *filmleader_defaults [] = {
 
 # endif
 
-# ifdef USE_IPHONE
+  /* Note: these font sizes aren't relative to screen pixels, but to the
+     712 x Y or X x 712 canvas that we draw in, which is then scaled to
+     the size of the screen by analogtv. */
 
+# if defined(HAVE_IPHONE) || defined(HAVE_COCOA)
   "*numberFont:  Helvetica Bold 120",
   "*numberFont2: Helvetica 36",
   "*numberFont3: Helvetica 28",
-
-# else /* X11, Cocoa or Android */
-
-  "*numberFont:  -*-helvetica-bold-r-*-*-*-1700-*-*-*-*-*-*",
-  "*numberFont2: -*-helvetica-medium-r-*-*-*-500-*-*-*-*-*-*",
-  "*numberFont3: -*-helvetica-medium-r-*-*-*-360-*-*-*-*-*-*",
-
+# else /* X11 or Android */
+  "*numberFont:  Helvetica Bold 170",
+  "*numberFont2: Helvetica 50",
+  "*numberFont3: Helvetica 36",
 # endif
-
 
   "*noise:       0.04",
   ANALOGTV_DEFAULTS
+  ".lowrez: false",  /* Required on macOS, or font size fucks up */
   "*geometry: 1280x720",
   0
 };

@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2016 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright (c) 2016-2020 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -21,7 +21,7 @@
 #include "xlockmoreI.h"
 #include "textclient.h"
 
-#if defined(USE_IPHONE) || (HAVE_ANDROID)
+#if defined(HAVE_IPHONE) || (HAVE_ANDROID)
 # include "jwzgles.h"
 #else
 # include <OpenGL/OpenGL.h>
@@ -173,7 +173,18 @@ glXSwapBuffers (Display *dpy, Window window)
 GLXContext *
 init_GL (ModeInfo *mi)
 {
-  // Window win = mi->window;
+  /* The X11 version of this function is in hacks/glx/xlock-gl-utils.c
+     That version:
+       - Does the GLX or EGL initialization;
+       - Does glDrawBuffer GL_BACK/GL_FRONT depending on GL_DOUBLEBUFFER;
+       - Parses the "background" resource rather than assuming black.
+   */
+  glClearColor (0, 0, 0, 1);
+  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glClearColor(0,0,0,1);
+
+  glClearColor(0,0,0,1);
 
   // Caller expects a pointer to an opaque struct...  which it dereferences.
   // Don't ask me, it's historical...
@@ -186,6 +197,7 @@ void
 check_gl_error (const char *type)
 {
   char buf[100];
+  char buf2[200];
   GLenum i;
   const char *e;
   switch ((i = glGetError())) {
@@ -205,5 +217,6 @@ check_gl_error (const char *type)
     default:
       e = buf; sprintf (buf, "unknown GL error %d", (int) i); break;
   }
-  __android_log_write(ANDROID_LOG_ERROR, "xscreensaver", e);
+  sprintf (buf2, "%.50s: %.50s", type, e);
+  __android_log_write(ANDROID_LOG_ERROR, "xscreensaver", buf2);
 }

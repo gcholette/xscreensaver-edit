@@ -61,8 +61,6 @@ static const char sccsid[] = "@(#)boxed.c	0.9 01/09/26 xlockmore";
 # define DEF_DECAY	"0.07"
 # define DEF_MOMENTUM	"0.6"
 
-#undef countof 
-#define countof(x) (int)(sizeof((x))/sizeof((*x)))
 #undef rnd
 #define rnd() (frand(1.0))
 
@@ -1029,15 +1027,13 @@ static void draw(ModeInfo * mi)
    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
    glLoadIdentity();
    
-# ifdef HAVE_MOBILE	/* Keep it the same relative size when rotated. */
   {
-    GLfloat h = MI_HEIGHT(mi) / (GLfloat) MI_WIDTH(mi);
-    int o = (int) current_device_rotation();
-    if (o != 0 && o != 180 && o != -180)
-      glScalef (1/h, 1/h, 1/h);
-    glRotatef(o, 0, 0, 1);
+    GLfloat s = (MI_WIDTH(mi) < MI_HEIGHT(mi)
+                 ? (MI_WIDTH(mi) / (GLfloat) MI_HEIGHT(mi))
+                 : 1);
+    glRotatef(current_device_rotation(), 0, 0, 1);
+    glScalef (s, s, s);
   }
-# endif
 
    gp->tic += 0.01f;
    gp->camtic += 0.01f + 0.01f * sin(gp->tic * speed);
@@ -1248,7 +1244,7 @@ pinit(ModeInfo * mi)
    gp->tic = gp->camtic = rnd() * 100.0f;
    
    /* define tex1 (bottom plate) */
-   gp->tex1 = (char *)malloc(3*width*height*sizeof(GLuint));
+   gp->tex1 = (char *)malloc(3*width*height*sizeof(*gp->tex1));
    texpixels = 256*256; /*width*height;*/
    texpixeldata = header_data;
    texpixeltarget = gp->tex1;

@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2012-2018 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2012-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -11,7 +11,7 @@
  * This implements the top-level screen-saver selection list in the iOS app.
  */
 
-#ifdef USE_IPHONE  // whole file
+#ifdef HAVE_IPHONE  // whole file
 
 
 #import "SaverListController.h"
@@ -27,8 +27,17 @@
 
 - (void) titleTapped:(id) sender
 {
-  [[UIApplication sharedApplication]
-    openURL:[NSURL URLWithString:@"https://www.jwz.org/xscreensaver/"]];
+  UIApplication *app = [UIApplication sharedApplication];
+  NSURL *url = [NSURL URLWithString:@"https://www.jwz.org/xscreensaver/"];
+
+  if ([app respondsToSelector:@selector(openURL:options:completionHandler:)]) {
+    [app openURL:url options:@{} completionHandler:nil];
+  } else {
+#   pragma clang diagnostic push   // "openURL deprecated in iOS 10"
+#   pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    [app openURL:url];
+#   pragma clang diagnostic pop
+  }
 }
 
 
@@ -39,7 +48,7 @@
   // I guess I could add custom key to the Info.plist for this.
 
   NSArray *a = [[NSString stringWithCString: screensaver_id
-                          encoding:NSASCIIStringEncoding]
+                          encoding:NSUTF8StringEncoding]
                  componentsSeparatedByCharactersInSet:
                    [NSCharacterSet
                      characterSetWithCharactersInString:@" ()-"]];
@@ -51,7 +60,7 @@
                         [year stringByAppendingString:
                                 @" Jamie Zawinski <jwz@jwz.org>"]];
 
-  UIView *v = [[UIView alloc] initWithFrame:CGRectZero];
+  v = [[UIView alloc] initWithFrame:CGRectZero];
 
   // The "go to web page" button on the right
 
@@ -72,8 +81,8 @@
 
   // The title bar
 
-  UILabel *label1 = [[UILabel alloc] initWithFrame:CGRectZero];
-  UILabel *label2 = [[UILabel alloc] initWithFrame:CGRectZero];
+  label1 = [[UILabel alloc] initWithFrame:CGRectZero];
+  label2 = [[UILabel alloc] initWithFrame:CGRectZero];
   [label1 setText: line1];
   [label2 setText: line2];
   [label1 setBackgroundColor:[UIColor clearColor]];
@@ -84,33 +93,10 @@
   [label1 sizeToFit];
   [label2 sizeToFit];
 
-  CGRect r1 = [label1 frame];
-  CGRect r2 = [label2 frame];
-  CGRect r3 = r2;
+  label2.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 
-  CGRect win = [self view].frame;
-  if (win.size.width > 414 && win.size.height > 414) {		// iPad
-    [label1 setTextAlignment: NSTextAlignmentLeft];
-    [label2 setTextAlignment: NSTextAlignmentRight];
-    label2.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
-    r3.size.width = win.size.width;
-    r1 = r3;
-    r1.origin.x   += 6;
-    r1.size.width -= 12;
-    r2 = r1;
-
-  } else {							// iPhone
-    r3.size.width = win.size.width; // force it to be flush-left
-    [label1 setTextAlignment: NSTextAlignmentLeft];
-    [label2 setTextAlignment: NSTextAlignmentLeft];
-    r1.origin.y = -1;    // make it fit in landscape
-    r2.origin.y = r1.origin.y + r1.size.height - 2;
-    r3.size.height = r1.size.height + r2.size.height;
-  }
   v.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-  [label1 setFrame:r1];
-  [label2 setFrame:r2];
-  [v setFrame:r3];
+  [v setFrame:CGRectMake(0, 0, self.view.frame.size.width, 0)];
 
   [v addSubview:label1];
   [v addSubview:label2];
@@ -120,13 +106,12 @@
 
   self.navigationItem.titleView = v;
 
-  win.origin.x = 0;
-  win.origin.y = 0;
-  win.size.height = 44; // #### This cannot possibly be right.
-  UISearchBar *search = [[UISearchBar alloc] initWithFrame:win];
+# ifndef HAVE_TVOS
+  search = [[UISearchBar alloc] init];
   search.delegate = self;
-  search.placeholder = @"Search...";
+  search.placeholder = NSLocalizedString(@"Search...", @"");
   self.tableView.tableHeaderView = search;
+# endif // !HAVE_TVOS
 
   // Dismiss the search field's keyboard as soon as we scroll.
 # ifdef __IPHONE_7_0
@@ -134,6 +119,46 @@
     [self.tableView setKeyboardDismissMode:
            UIScrollViewKeyboardDismissModeOnDrag];
 # endif
+}
+
+- (void)viewWillLayoutSubviews
+{
+  CGRect r1 = [label1 frame];
+  CGRect r2 = [label2 frame];
+  CGRect r3 = [v frame];
+
+  CGRect win = [self view].frame;
+  if (r3.size.width > 385) {
+    [label1 setTextAlignment: NSTextAlignmentLeft];
+    [label2 setTextAlignment: NSTextAlignmentRight];
+    r1.origin     = CGPointMake(6, 0);
+    r1.size.width = r3.size.width - 12;
+    r2 = r1;
+    r3.size.height = r2.size.height;
+
+  } else {
+    [label1 setTextAlignment: NSTextAlignmentLeft];
+    [label2 setTextAlignment: NSTextAlignmentLeft];
+    r1.origin = CGPointMake(0, -1);    // make it fit in landscape
+    r1.size.width = r3.size.width;
+    r2.origin = CGPointMake(0, r1.origin.y + r1.size.height - 2);
+    r2.size.width = r3.size.width;
+    r3.size.height = r1.size.height + r2.size.height;
+  }
+
+  r3.size.width = win.size.width;
+
+  [label1 setFrame:r1];
+  [label2 setFrame:r2];
+  [v setFrame:r3];
+
+  win.origin.x = 0;
+  win.origin.y = 0;
+  win.size.height = 44; // #### This cannot possibly be right.
+
+  search.frame = win;
+
+  [super viewWillLayoutSubviews];
 }
 
 
@@ -158,7 +183,7 @@
     s[0] = (i == 'Z'-'A'+1 ? '#' : i+'A');
     s[1] = 0;
     [a addObject: [NSString stringWithCString:s
-                            encoding:NSASCIIStringEncoding]];
+                            encoding:NSUTF8StringEncoding]];
   }
   return a;
 }
@@ -209,7 +234,7 @@
     if (! matchp)
       continue;
 
-    int index = ([name cStringUsingEncoding: NSASCIIStringEncoding])[0];
+    int index = ([name cStringUsingEncoding: NSUTF8StringEncoding])[0];
     if (index >= 'a' && index <= 'z')
       index -= 'a'-'A';
     if (index >= 'A' && index <= 'Z')
@@ -287,7 +312,9 @@
              autorelease];
 
   cell.textLabel.text = title;
+# ifndef HAVE_TVOS
   cell.accessoryType = UITableViewCellAccessoryDetailDisclosureButton;
+# endif // !HAVE_TVOS
   cell.detailTextLabel.text = desc;
 
   return cell;
@@ -373,8 +400,35 @@
     return;
   NSMutableArray *a = [NSMutableArray arrayWithCapacity: 200];
   for (NSArray *sec in letter_sections)
-    for (NSString *s in sec)
+    for (NSString *s in sec) {
+
+# ifdef HAVE_IPHONE
+      // Check the "SaverName.globalCycleSelected" preference.
+
+      NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+      NSString *key = [s stringByAppendingString:@".globalCycleSelected"];
+      NSObject *o = [prefs objectForKey:key];
+      BOOL checked_p;
+
+      // Roughly duplicate logic of PrefsReader:getBooleanResource
+      if (o && [o isKindOfClass:[NSNumber class]]) {
+        double n = [(NSNumber *) o doubleValue];
+        checked_p = !!n;
+      } else if (o && [o isKindOfClass:[NSString class]]) {
+        NSString *ss = [((NSString *) o) lowercaseString];
+        checked_p = ([ss isEqualToString:@"true"] ||
+                     [ss isEqualToString:@"yes"] ||
+                     [ss isEqualToString:@"1"]);
+      } else {
+        checked_p = YES;  // Default true
+      }
+
+      if (! checked_p)  // Omit from list if un-checked
+        continue;
+# endif // HAVE_IPHONE
+
       [a addObject: s];
+    }
   int n = [a count];
   if (! n) return;
   NSString *which = [a objectAtIndex: (random() % n)];
@@ -401,4 +455,4 @@
 @end
 
 
-#endif // USE_IPHONE -- whole file
+#endif // HAVE_IPHONE -- whole file

@@ -1,4 +1,4 @@
-/* razzledazzle, Copyright (c) 2018 Jamie Zawinski <jwz@jwz.org>
+/* razzledazzle, Copyright (c) 2018-2020 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -16,8 +16,6 @@
 			"*suppressRotationAnimation: True\n" \
 
 # define release_dazzle 0
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #include "xlockmore.h"
 #include "colors.h"
@@ -339,7 +337,7 @@ reshape_dazzle (ModeInfo *mi, int width, int height)
     glOrtho (0, 1, 0.5-s, 0.5+s, -1, 1);
   }
 
-# ifdef USE_IPHONE	/* So much WTF */
+# ifdef HAVE_MOBILE	/* So much WTF */
   {
     int rot = current_device_rotation();
 
@@ -596,7 +594,7 @@ draw_dazzle (ModeInfo *mi)
 
   if (bp->which_ship != -1)
     {
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
       int rot = current_device_rotation();
 # endif
 
@@ -612,7 +610,7 @@ draw_dazzle (ModeInfo *mi)
           glEnable (GL_DEPTH_TEST);
         }
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
       glRotatef (90, 0, 0, 1);
       if (rot == 90 || rot == -270)
         glRotatef (180, 0, 0, 1);
@@ -623,7 +621,7 @@ draw_dazzle (ModeInfo *mi)
       glScalef (0.9, 0.9, 0.9);
       glTranslatef (-0.5, 0, -0.2);
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
       if (rot == 0 || rot == 180 || rot == -180)
         glScalef (1, 1, (GLfloat) MI_HEIGHT(mi) / MI_WIDTH(mi));
       else

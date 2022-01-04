@@ -8,39 +8,39 @@
   <description>Updates to xscreensaver.</description>
   <language>en</language>
   <item>
-   <title>Version 5.42</title>
-   <link>https://www.jwz.org/xscreensaver/xscreensaver-5.42.dmg</link>
-   <description><![CDATA[&bull; macOS: Fixed Sparkle auto-updater.]]></description>
-   <pubDate>Fri, 28 Dec 2018 16:20:28 -0800</pubDate>
-   <enclosure url="https://www.jwz.org/xscreensaver/xscreensaver-5.42.dmg"
-    sparkle:version="5.42"
-    sparkle:dsaSignature="MC0CFQC1IPDQbZA8nlNOy66NB/EpedRH6QIUSezxMtsmla56Axi6QpMzIKYaFAI="
-    sparkle:edSignature="TlJojJAVzOQvQ5rUkHPvTpKtePMGKErePVI8nRvTnZjgaLR5YvxAiZAykdYeA1fip81jwzMXnOA14DxfumscAQ=="
-    length="36576409"
+   <title>Version 6.02</title>
+   <link>https://www.jwz.org/xscreensaver/xscreensaver-6.02.dmg</link>
+   <description><![CDATA[&bull; New hacks, `marbling' and `binaryhorizon'. <BR>&bull; `atlantis' behaviors are more random and lifelike. <BR>&bull; `headroom' is now Mask Headroom. ]]></description>
+   <pubDate>Mon, 11 Oct 2021 17:59:05 -0700</pubDate>
+   <enclosure url="https://www.jwz.org/xscreensaver/xscreensaver-6.02.dmg"
+    sparkle:version="6.02"
+    sparkle:dsaSignature="MC0CFEMgHT9197n3dB0BGkBlrdfGDiz+AhUAjR06lKtPNhN1/4rt2BZIaCeEaa4="
+    sparkle:edSignature="K/bR5Wmowr6kYBLgSstuH6ZWSPddaKl8FUZYgbxps1OA9SG//+i7ALJw81ATJlGWwFa74yYtDLhsaMK84Da+Bw=="
+    length="67267269"
     type="application/octet-stream" />
   </item>
   <item>
-   <title>Version 5.41</title>
-   <link>https://www.jwz.org/xscreensaver/xscreensaver-5.41.dmg</link>
-   <description><![CDATA[&bull; X11: Those new font-loading fallback heuristics work again. Oops. <BR>&bull; iOS, Android: Plugged many memory leaks at exit. <BR>&bull; New hack, `handsy'. <BR>&bull; Fixed `noof' from displaying minimalistically. <BR>&bull; Rewrote `unknownpleasures' to be faster, and a true waterfall graph. <BR>&bull; BSOD Solaris improved. DVD added. <BR>&bull; Linux: If the xscreensaver daemon is setuid, then we can implore the kernel's out-of-memory killer to pretty please not unlock the screen. <BR>&bull; macOS: Upgraded Sparkle (the "Check for Updates" library). <BR>&bull; macOS: Screen saver settings work again on 10.14.]]></description>
-   <pubDate>Wed, 26 Dec 2018 23:00:51 -0800</pubDate>
-   <enclosure url="https://www.jwz.org/xscreensaver/xscreensaver-5.41.dmg"
-    sparkle:version="5.41"
-    sparkle:dsaSignature="MC0CFEH7e4ONZ1wfijWGBMEHwLESwKS3AhUAuhLIv/AsPsE60Jcmgm0eJDU0BRA="
-    sparkle:edSignature="2hXB1NVm+HZsj3aMCgOmdwX1zHT+dJ95v5aI2Cyn6vEReOUs+NSxqpoWEWQgH/AIMYhr9I3b4c5e/MceOdK7Bg=="
-    length="35542175"
+   <title>Version 6.00</title>
+   <link>https://www.jwz.org/xscreensaver/xscreensaver-6.00.dmg</link>
+   <description><![CDATA[&bull; Improved GLSL and GLES3 support: Phong shading in `etruscanvenus', `hypertorus', `klein', `projectiveplane',`romanboy' and `sphereeversion'. <BR>&bull; Updates to `cubicgrid'. <BR>&bull; Added a `Random XScreenSaver' screen saver, which implements cycle mode, among other things. ]]></description>
+   <pubDate>Thu, 01 Apr 2021 02:18:28 -0700</pubDate>
+   <enclosure url="https://www.jwz.org/xscreensaver/xscreensaver-6.00.dmg"
+    sparkle:version="6.00"
+    sparkle:dsaSignature="MCwCFBxhmIrsI5fzulYpnqb786HAAHsDAhR2rtZihZUc7wWjxEiZPS1dY9O+ig=="
+    sparkle:edSignature="33OZlfSDYILARuBcbLGVHHCMq8NZPDK0BYGDhLfyagfVHeGYiBruq9EkqpNZ/IAaeyDoZwoIB0ZqdQwZOPZuBw=="
+    length="39207177"
     type="application/octet-stream" />
   </item>
   <item>
-   <title>Version 5.40</title>
-   <link>https://www.jwz.org/xscreensaver/xscreensaver-5.40.dmg</link>
-   <description><![CDATA[&bull; New hacks, `filmleader', `vfeedback'. <BR>&bull; New hack, `glitchpeg' (X11 and macOS only). <BR>&bull; GLPlanet blends between day and night maps at the dusk terminator. <BR>&bull; DymaxionMap can display arbitrary map images, and animate sunlight across the flattened globe. <BR>&bull; Tessellimage can draw either Delaunay or Voronoi tilings. <BR>&bull; XAnalogTV includes test cards. <BR>&bull; Android: These hacks work now: `blitspin', `bumps', `cityflow', `endgame', `esper', `flipscreen3d', `gleidescope', `glslideshow', `jigglypuff', `queens', `tessellimage', `xanalogtv', `xmatrix', `zoom'.]]></description>
-   <pubDate>Sun, 12 Aug 2018 16:39:18 -0700</pubDate>
-   <enclosure url="https://www.jwz.org/xscreensaver/xscreensaver-5.40.dmg"
-    sparkle:version="5.40"
-    sparkle:dsaSignature="MCwCFBVb+Vyo39OOfiuqm9K3zmrahnGIAhRK6pirSDvI1gT0ddtv+okGTW4NLg=="
-    sparkle:edSignature="R3FTLn+BURQDTK8BORtPeUrLrb2BLyhP2TeEU11Y9oXl2epIJ2owMS2BvsQke+gV/nEyzq34sUnBHnCsKvfgDg=="
-    length="34297646"
+   <title>Version 5.45</title>
+   <link>https://www.jwz.org/xscreensaver/xscreensaver-5.45.dmg</link>
+   <description><![CDATA[&bull; New hacks, `covid19', `headroom', `sphereeversion' and `beats'. <BR>&bull; Shader updates to `hypertorus'. <BR>&bull; No more image-loading pause in `glslideshow'. <BR>&bull; BSOD supports GNOME. <BR>&bull; Image loaders support SVG. <BR>&bull; Fixed text loading on 10.15. <BR>&bull; Various bug fixes.]]></description>
+   <pubDate>Mon, 07 Dec 2020 12:27:00 -0800</pubDate>
+   <enclosure url="https://www.jwz.org/xscreensaver/xscreensaver-5.45.dmg"
+    sparkle:version="5.45"
+    sparkle:dsaSignature="MCwCFHczJ/PDQtWHm5Jy5qL42+LYJ2JxAhRih4+VsmQwzjJzFz0Q0EyYF+JExw=="
+    sparkle:edSignature="UNj3hYcW4KcjEZcVA/Iz364donhc6T5FAPN+JFzpUQgLdc98QlIjGqDXdPwE4+Y9IfQpw/WyxMzJmZOpvNHCAw=="
+    length="38766929"
     type="application/octet-stream" />
   </item>
   <item>

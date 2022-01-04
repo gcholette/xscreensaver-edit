@@ -20,9 +20,9 @@
  * so you see a ghostly, misaligned image.
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif /* HAVE_CONFIG_H */
+#include "screenhack.h"
+#include "ximage-loader.h"
+#include "analogtv.h"
 
 #include <math.h>
 
@@ -33,10 +33,6 @@
 #ifndef HAVE_JWXYZ
 # include <X11/Intrinsic.h> /* for XtDatabase in hack_resources() */
 #endif
-
-#include "screenhack.h"
-#include "ximage-loader.h"
-#include "analogtv.h"
 
 #define USE_TEST_PATTERNS
 
@@ -381,6 +377,8 @@ static void load_station_images(struct state *st)
 #endif
     else if (img_file && *img_file) {
 
+      analogtv_input *input;
+
       /* Load a single image file into every free channel. */
       if (! ximage) {
         int w, h;
@@ -389,7 +387,7 @@ static void load_station_images(struct state *st)
         XFreePixmap (st->dpy, p);
       }
 
-      analogtv_input *input = st->stations[i];
+      input = st->stations[i];
       analogtv_setup_sync(input, 1, (random()%20)==0);
       analogtv_load_ximage (st->tv, input, ximage, 0, 0, 0, 0, 0);
       analogtv_setup_teletext(input);

@@ -55,7 +55,7 @@ Food is ditributed randomly on the screen (Yes, the cells need to eat). This par
 maximum amount of food per pixel. Default is 20.
 .TP 8
 .B \-divideage \fInum\fP\fP
-Specifies the minimum age in frames a cell needs to have before beeing able to divide. Default is 20
+Specifies the minimum age in frames a cell needs to have before being able to divide. Default is 20
 .TP 8
 .B \-mindist \fInum\fP\fP
 Specifies the minimum distance between cells. Default 1.4
@@ -83,7 +83,7 @@ stored in the RESOURCE_MANAGER property.
 .SH SEE ALSO
 .BR X (1),
 .BR xscreensaver (1)
-.BR xscreensaver\-demo (1),
+.BR xscreensaver\-settings (1),
 .SH COPYRIGHT
 Copyright \(co 2007 by Matthias Toussaint.  Permission to use, copy, modify,
 distribute, and sell this software and its documentation for any purpose is

@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2015 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 2006-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -13,6 +13,8 @@
  */
 
 #import "InvertedSlider.h"
+
+#ifndef HAVE_TVOS
 
 @implementation InvertedSlider
 
@@ -34,11 +36,27 @@
 }
 
 
+-(double) increment
+{
+  return increment;
+}
+
+
+-(void) setIncrement:(double)v
+{
+  increment = v;
+}
+
+
 -(double) transformValue:(double) value
 {
-  double v2 = (integers
-               ? (int) (value + (value < 0 ? -0.5 : 0.5))
-               : value);
+  double v2 = value;
+
+  if (increment)
+    v2 = round (v2 / increment) * increment;
+  if (integers)
+    v2 = (int) (v2 + (v2 < 0 ? -0.5 : 0.5));
+
   double low   = [self minValue];
   double high  = [self maxValue];
   double range = high - low;
@@ -49,7 +67,7 @@
   return v2;
 }
 
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
 
 /* On MacOS, we have to transform the value on every entry and exit point
    to this class.  So, we implement doubleValue and setDoubleValue to
@@ -110,7 +128,7 @@
   [self setDoubleValue:[((NSNumber *) v) doubleValue]];
 }
 
-#else  // USE_IPHONE
+#else  // HAVE_IPHONE
 
 /* On iOS, we have control over how the value is displayed, but there's no
    way to transform the value on input and output: if we wrap 'value' and
@@ -145,7 +163,9 @@
   [self setValue: [self transformValue: v]];
 }
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 @end
+
+#endif // !HAVE_TVOS

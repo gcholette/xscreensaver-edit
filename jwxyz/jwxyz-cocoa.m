@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 1991-2018 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright © 1991-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -11,11 +11,10 @@
 
 /* JWXYZ Is Not Xlib.
 
-   But it's a bunch of function definitions that bear some resemblance to
-   Xlib and that do Cocoa-ish or OpenGL-ish things that bear some resemblance
-   to the things that Xlib might have done.
+   Cocoa glue for macOS and iOS: fonts and such.
 
-   This code is used by both the original jwxyz.m and the new jwxyz-gl.c.
+   See the comment at the top of jwxyz-common.c for an explanation of
+   the division of labor between these various modules.
  */
 
 #import "jwxyzI.h"
@@ -24,7 +23,7 @@
 
 #include <stdarg.h>
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 # import <OpenGLES/ES1/gl.h>
 # import <OpenGLES/ES1/glext.h>
 # define NSOpenGLContext EAGLContext
@@ -94,12 +93,12 @@ jwxyz_drawable_depth (Drawable d)
 }
 
 
-float
-jwxyz_scale (Window main_window)
+static float
+jwxyz_scale_1 (Window main_window, BOOL fonts_p)
 {
   float scale = 1;
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   /* Since iOS screens are physically smaller than desktop screens, scale up
      the fonts to make them more readable.
 
@@ -108,18 +107,30 @@ jwxyz_scale (Window main_window)
      or so, even if the display has significantly higher resolution.  That is
      unrelated to this hack, which is really about DPI.
    */
-  scale = main_window->window.view.hackedContentScaleFactor;
+  scale = [main_window->window.view hackedContentScaleFactor:fonts_p];
   if (scale < 1) // iPad Pro magnifies the backbuffer by 3x, which makes text
     scale = 1;   // excessively blurry in BSOD.
 
-# else  // !USE_IPHONE
+# else  // !HAVE_IPHONE
 
   /* Desktop retina displays also need fonts doubled. */
-  scale = main_window->window.view.hackedContentScaleFactor;
+  scale = [main_window->window.view hackedContentScaleFactor:fonts_p];
 
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 
   return scale;
+}
+
+float
+jwxyz_scale (Window main_window)
+{
+  return jwxyz_scale_1 (main_window, FALSE);
+}
+
+float
+jwxyz_font_scale (Window main_window)
+{
+  return jwxyz_scale_1 (main_window, TRUE);
 }
 
 
@@ -181,7 +192,7 @@ utf8_metrics (Display *dpy, NSFont *nsfont, NSString *nsstr, XCharStruct *cs)
     CGFloat advancement =
       CTRunGetTypographicBounds (run, r, &ascent, &descent, &leading);
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
     // Only necessary for when LCD smoothing is enabled, which iOS doesn't do.
     bbox.origin.x    -= 2.0/3.0;
     bbox.size.width  += 4.0/3.0;
@@ -222,7 +233,7 @@ utf8_metrics (Display *dpy, NSFont *nsfont, NSString *nsstr, XCharStruct *cs)
 static NSArray *
 font_family_members (NSString *family_name)
 {
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   return [[NSFontManager sharedFontManager]
           availableMembersOfFontFamily:family_name];
 # else
@@ -263,7 +274,7 @@ try_font (NSFontTraitMask traits, NSFontTraitMask mask,
         traits & NSFixedPitchFontMask ? JWXYZ_STYLE_MONOSPACE : 0)]);
   }
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   for (unsigned k = 0; k != family_members.count; ++k) {
 
     NSArray *member = [family_members objectAtIndex:k];
@@ -296,7 +307,7 @@ try_font (NSFontTraitMask traits, NSFontTraitMask mask,
       return f;
     }
   }
-# else // USE_IPHONE
+# else // HAVE_IPHONE
 
   // This trick needs iOS 3.1, see "Using SDK-Based Development".
   Class has_font_descriptor = [UIFontDescriptor class];
@@ -319,7 +330,7 @@ try_font (NSFontTraitMask traits, NSFontTraitMask mask,
         font_mask |= NSBoldFontMask;
       if (MATCH(@"Italic") || MATCH(@"Oblique"))
         font_mask |= NSItalicFontMask;
-      if (MATCH(@"Courier"))
+      if (MATCH(@"Courier") || MATCH(@"monospace") || MATCH(@"fixed"))
         font_mask |= NSFixedPitchFontMask;
     }
 
@@ -358,7 +369,7 @@ static NSFont *
 random_font (NSFontTraitMask traits, NSFontTraitMask mask, float size)
 {
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   // Providing Unbold or Unitalic in the mask for availableFontNamesWithTraits
   // returns an empty list, at least on a system with default fonts only.
   NSArray *families = [[NSFontManager sharedFontManager]
@@ -383,7 +394,7 @@ random_font (NSFontTraitMask traits, NSFontTraitMask mask, float size)
 
     families = new_families;
   }
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   long n = [families count];
   if (n <= 0) return 0;
@@ -421,7 +432,7 @@ jwxyz_load_native_font (Window main_window, int traits_jwxyz, int mask_jwxyz,
                            encoding:NSUTF8StringEncoding] :
     nil;
 
-  size *= jwxyz_scale (main_window);
+  size *= jwxyz_font_scale (main_window);
 
   if (font_name_type == JWXYZ_FONT_RANDOM) {
 
@@ -551,7 +562,7 @@ jwxyz_render_text (Display *dpy, void *native_font,
 void
 jwxyz_get_pos (Window w, XPoint *xvpos, XPoint *xp)
 {
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 
   xvpos->x = 0;
   xvpos->y = 0;
@@ -561,7 +572,7 @@ jwxyz_get_pos (Window w, XPoint *xvpos, XPoint *xp)
     xp->y = w->window.last_mouse_y;
   }
 
-# else  // !USE_IPHONE
+# else  // !HAVE_IPHONE
 
   NSWindow *nsw = [w->window.view window];
 
@@ -619,11 +630,11 @@ jwxyz_get_pos (Window w, XPoint *xvpos, XPoint *xp)
     xp->y = (int) p.y;
   }
 
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
 }
 
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 
 void
 check_framebuffer_status (void)
@@ -681,7 +692,7 @@ create_framebuffer (GLuint *gl_framebuffer, GLuint *gl_renderbuffer)
   glBindRenderbufferOES (GL_RENDERBUFFER_OES, *gl_renderbuffer);
 }
 
-#endif // USE_IPHONE
+#endif // HAVE_IPHONE
 
 
 #if defined JWXYZ_QUARTZ
@@ -829,7 +840,7 @@ jwxyz_copy_area (Display *dpy, Drawable src, Drawable dst, GC gc,
   /* Strange and ugly flickering when going the glCopyTexImage2D route on
      OS X. (Early 2009 Mac mini, OS X 10.10)
    */
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 
   /* TODO: This might not still work. */
   jwxyz_bind_drawable (dpy, dpy->main_window, src);
@@ -838,10 +849,10 @@ jwxyz_copy_area (Display *dpy, Drawable src, Drawable dst, GC gc,
   jwxyz_bind_drawable (dpy, dpy->main_window, dst);
   jwxyz_gl_copy_area_write_tex_image (dpy, gc, src_x, src_y,
                                       width, height, dst_x, dst_y);
-# else // !USE_IPHONE
+# else // !HAVE_IPHONE
   jwxyz_gl_copy_area_read_pixels (dpy, src, dst, gc,
                                   src_x, src_y, width, height, dst_x, dst_y);
-# endif // !USE_IPHONE
+# endif // !HAVE_IPHONE
   jwxyz_assert_gl ();
 }
 
@@ -865,7 +876,7 @@ jwxyz_assert_gl ()
 void
 jwxyz_assert_drawable (Window main_window, Drawable d)
 {
-#if !defined USE_IPHONE && !defined __OPTIMIZE__
+#if !defined HAVE_IPHONE && !defined __OPTIMIZE__
   XScreenSaverView *view = main_window->window.view;
   NSOpenGLContext *ogl_ctx = [view oglContext];
 
@@ -884,7 +895,7 @@ jwxyz_assert_drawable (Window main_window, Drawable d)
     perror([[exception reason] UTF8String]);
     jwxyz_abort();
   }
-#endif // !USE_IPHONE && !__OPTIMIZE__
+#endif // !HAVE_IPHONE && !__OPTIMIZE__
 }
 
 
@@ -913,7 +924,7 @@ jwxyz_bind_drawable (Window main_window, Drawable d)
   jwxyz_assert_gl ();
   jwxyz_assert_drawable (main_window, d);
 
-#if defined USE_IPHONE && !defined __OPTIMIZE__
+#if defined HAVE_IPHONE && !defined __OPTIMIZE__
   Drawable current_drawable = main_window->window.current_drawable;
   Assert (!current_drawable
             || current_drawable->ogl_ctx == [EAGLContext currentContext],
@@ -930,7 +941,7 @@ jwxyz_bind_drawable (Window main_window, Drawable d)
     main_window->window.current_drawable = d;
 
     /* Doing this repeatedly is probably not OK performance-wise. Probably. */
-#ifndef USE_IPHONE
+#ifndef HAVE_IPHONE
     [d->ogl_ctx makeCurrentContext];
 #else
     [EAGLContext setCurrentContext:d->ogl_ctx];
@@ -961,7 +972,7 @@ XCreatePixmap (Display *dpy, Drawable d,
   /* TODO: If Pixel buffers are not supported, do something about it. */
   Window w = XRootWindow (dpy, 0);
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
 
   p->ogl_ctx = [[NSOpenGLContext alloc]
                 initWithFormat:w->window.pixfmt
@@ -985,7 +996,7 @@ XCreatePixmap (Display *dpy, Drawable d,
                  mipMapLevel:0
         currentVirtualScreen:w->window.virtual_screen];
 
-# else // USE_IPHONE
+# else // HAVE_IPHONE
 
   p->ogl_ctx = w->window.ogl_ctx_pixmap;
 
@@ -1000,7 +1011,7 @@ XCreatePixmap (Display *dpy, Drawable d,
 
   glBindFramebufferOES(GL_FRAMEBUFFER_OES, p->gl_framebuffer);
 
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   w->window.current_drawable = p;
   glViewport (0, 0, width, height);
@@ -1021,16 +1032,16 @@ XFreePixmap (Display *d, Pixmap p)
 
   Window w = RootWindow (d, 0);
 
-# ifndef USE_IPHONE
+# ifndef HAVE_IPHONE
   CFRelease (p->ogl_ctx);
   [p->ogl_ctx release];
 
   CFRelease (p->pixmap.gl_pbuffer);
   [p->pixmap.gl_pbuffer release];
-# else  // USE_IPHONE
+# else  // HAVE_IPHONE
   glDeleteRenderbuffersOES (1, &p->gl_renderbuffer);
   glDeleteFramebuffersOES (1, &p->gl_framebuffer);
-# endif // USE_IPHONE
+# endif // HAVE_IPHONE
 
   if (w->window.current_drawable == p) {
     w->window.current_drawable = NULL;

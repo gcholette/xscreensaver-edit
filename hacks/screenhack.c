@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 1992-2017 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright (c) 1992-2021 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -97,17 +97,8 @@
 # include <X11/SGIScheme.h>	/* for SgiUseSchemes() */
 #endif /* __sgi */
 
-#ifdef HAVE_XMU
-# ifndef VMS
-#  include <X11/Xmu/Error.h>
-# else /* VMS */
-#  include <Xmu/Error.h>
-# endif
-#else
-# include "xmu.h"
-#endif
-
 #include "screenhackI.h"
+#include "xmu.h"
 #include "version.h"
 #include "vroot.h"
 #include "fps.h"
@@ -265,7 +256,7 @@ MapNotify_event_p (Display *dpy, XEvent *event, XPointer window)
 }
 
 
-static Atom XA_WM_PROTOCOLS, XA_WM_DELETE_WINDOW;
+static Atom XA_WM_PROTOCOLS, XA_WM_DELETE_WINDOW, XA_NET_WM_PID;
 
 /* Dead-trivial event handling: exits if "q" or "ESC" are typed.
    Exit if the WM_PROTOCOLS WM_DELETE_WINDOW ClientMessage is received.
@@ -444,10 +435,13 @@ screenhack_table_handle_events (Display *dpy,
                                 )
 {
   XtAppContext app = XtDisplayToApplicationContext (dpy);
+  XtInputMask m = XtAppPending (app);
 
-  if (XtAppPending (app) & (XtIMTimer|XtIMAlternateInput))
-    XtAppProcessEvent (app, XtIMTimer|XtIMAlternateInput);
+  /* Process non-X11 Xt events (timers, files, signals) without blocking. */
+  if (m & ~XtIMXEvent)
+    XtAppProcessEvent (app, ~XtIMXEvent);
 
+  /* Process all pending X11 events without blocking. */
   while (XPending (dpy))
     {
       XEvent event;
@@ -475,8 +469,10 @@ screenhack_table_handle_events (Display *dpy,
         if (! screenhack_handle_event_1 (dpy, &event))
           return False;
 
-      if (XtAppPending (app) & (XtIMTimer|XtIMAlternateInput))
-        XtAppProcessEvent (app, XtIMTimer|XtIMAlternateInput);
+      /* Last chance to process Xt timers before blocking. */
+      m = XtAppPending (app);
+      if (m & ~XtIMXEvent)
+        XtAppProcessEvent (app, ~XtIMXEvent);
     }
 
 # ifdef EXIT_AFTER
@@ -611,12 +607,14 @@ run_screenhack_table (Display *dpy,
   if (anim_state) screenhack_record_anim_free (anim_state);
 #endif
 
-  ft->free_cb (dpy, window, closure);
   if (fpst) ft->fps_free (fpst);
+#ifdef DEBUG_PAIR
+  if (fpst2) ft->fps_free (fpst2);
+#endif
 
+  ft->free_cb (dpy, window, closure);
 #ifdef DEBUG_PAIR
   if (window2) ft->free_cb (dpy, window2, closure2);
-  if (fpst2) ft->fps_free (fpst2);
 #endif
 }
 
@@ -689,6 +687,7 @@ init_window (Display *dpy, Widget toplevel, const char *title)
 {
   Window window;
   XWindowAttributes xgwa;
+  long pid = getpid();
   XtPopup (toplevel, XtGrabNone);
   XtVaSetValues (toplevel, XtNtitle, title, NULL);
 
@@ -702,6 +701,8 @@ init_window (Display *dpy, Widget toplevel, const char *title)
   XChangeProperty (dpy, window, XA_WM_PROTOCOLS, XA_ATOM, 32,
                    PropModeReplace,
                    (unsigned char *) &XA_WM_DELETE_WINDOW, 1);
+  XChangeProperty (dpy, window, XA_NET_WM_PID, XA_CARDINAL, 32,
+                   PropModeReplace, (unsigned char *)&pid, 1);
 }
 
 
@@ -750,6 +751,15 @@ main (int argc, char **argv)
   SgiUseSchemes ("none"); 
 #endif /* __sgi */
 
+  /* Xt and xscreensaver predate the "--arg" convention, so convert
+     double dashes to single. */
+  {
+    int i;
+    for (i = 1; i < argc; i++)
+      if (argv[i][0] == '-' && argv[i][1] == '-')
+        argv[i]++;
+  }
+
   toplevel = XtAppInitialize (&app, progclass, merged_options,
 			      merged_options_size, &argc, argv,
 			      merged_defaults, 0, 0);
@@ -767,6 +777,7 @@ main (int argc, char **argv)
 
   XA_WM_PROTOCOLS = XInternAtom (dpy, "WM_PROTOCOLS", False);
   XA_WM_DELETE_WINDOW = XInternAtom (dpy, "WM_DELETE_WINDOW", False);
+  XA_NET_WM_PID = XInternAtom (dpy, "_NET_WM_PID", False);
 
   {
     char *v = (char *) strdup(strchr(screensaver_id, ' '));
@@ -788,15 +799,13 @@ main (int argc, char **argv)
 
   if (argc > 1)
     {
-      const char *s;
       int i;
       int x = 18;
       int end = 78;
       Bool help_p = (!strcmp(argv[1], "-help") ||
                      !strcmp(argv[1], "--help"));
       fprintf (stderr, "%s\n", version);
-      for (s = progclass; *s; s++) fprintf(stderr, " ");
-      fprintf (stderr, "  https://www.jwz.org/xscreensaver/\n\n");
+      fprintf (stderr, "\n\thttps://www.jwz.org/xscreensaver/\n\n");
 
       if (!help_p)
 	fprintf(stderr, "Unrecognised option: %s\n", argv[1]);

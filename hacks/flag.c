@@ -35,7 +35,7 @@ static const char sccsid[] = "@(#)flag.c	4.02 97/04/01 xlockmore";
 #ifdef HAVE_COCOA
 # define DEF_FONT "Monaco 15"
 #else
-# define DEF_FONT "fixed"
+# define DEF_FONT "-*-fixed-medium-r-*-*-*-100-*-*-c-*-*-*"
 #endif
 
 #ifdef STANDALONE
@@ -274,7 +274,7 @@ make_flag_bits(ModeInfo *mi)
 # if defined(_AIX)
 			  sprintf(text, "%s\n%s %s.%s",
 					  uts.nodename, uts.sysname, uts.version, uts.release);
-#  elif defined(__APPLE__) && !defined(USE_IPHONE)  /* MacOS X + XDarwin */
+#  elif defined(__APPLE__) && !defined(HAVE_IPHONE)  /* MacOS X + XDarwin */
               {
                 const char *file = 
                   "/System/Library/CoreServices/SystemVersion.plist";

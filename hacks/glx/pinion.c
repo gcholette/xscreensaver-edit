@@ -12,13 +12,11 @@
 #define DEFAULTS        "*delay:        15000              \n" \
                         "*showFPS:      False              \n" \
                         "*wireframe:    False              \n" \
-           "*titleFont:  -*-helvetica-medium-r-normal-*-*-180-*-*-*-*-*-*\n" \
-           "*titleFont2: -*-helvetica-medium-r-normal-*-*-120-*-*-*-*-*-*\n" \
-           "*titleFont3: -*-helvetica-medium-r-normal-*-*-80-*-*-*-*-*-*\n"  \
+		        "*titleFont:    sans-serif 18\n" \
+		        "*titleFont2:   sans-serif 12\n" \
+	        	"*titleFont3:   sans-serif 8\n"  \
 
 # define release_pinion 0
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #undef BELLRAND
 #define BELLRAND(n) ((frand((n)) + frand((n)) + frand((n))) / 3)
@@ -907,7 +905,7 @@ push_gear (ModeInfo *mi)
       fprintf (stderr, " %3.0f rpm;", g->rpm);
 
       {
-        char buf1[50], buf2[50], buf3[100];
+        char buf1[50], buf2[50], buf3[200];
         *buf1 = 0; *buf2 = 0; *buf3 = 0;
         if (pp->debug_size_failures)
           sprintf (buf1, "%3d sz", pp->debug_size_failures);

@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 2006-2018 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright (c) 2006-2020 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -23,7 +23,7 @@
    specified in the XML to the resource names to use).
  */
 
-#ifdef USE_IPHONE
+#ifdef HAVE_IPHONE
 # import <Foundation/Foundation.h>
 # import <UIKit/UIKit.h>
 # define NSView UIView
@@ -39,7 +39,7 @@
 #undef USE_PICKER_VIEW
 
 @interface XScreenSaverConfigSheet : 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
 	   UITableViewController <NSXMLParserDelegate,
 				  UITextFieldDelegate
 #  ifdef USE_PICKER_VIEW
@@ -51,14 +51,16 @@
 	   NSPanel <NSXMLParserDelegate>
 # endif
 {
-  NSString *saver_name;
+  NSString *classname;    // "MoebiusGears"
+  NSString *saver_title;  // "Möbius Gears"
   NSUserDefaultsController *userDefaultsController;
   NSUserDefaultsController *globalDefaultsController;
   NSDictionary *defaultOptions;
   const XrmOptionDescRec *opts;
   id xml_root, xml_parsing;
+  BOOL haveUpdater;
 
-# ifdef USE_IPHONE
+# ifdef HAVE_IPHONE
   UITextField *active_text_field;
   NSMutableArray *controls;
   NSMutableArray *pref_ctls;	// UIControl objects, with index = c.tag
@@ -71,9 +73,11 @@
 }
 
 - (id)initWithXML: (NSData *) xml_data
+        classname: (NSString *) _classname
           options: (const XrmOptionDescRec *) opts
        controller: (NSUserDefaultsController *) prefs
  globalController: (NSUserDefaultsController *) globalPrefs
-         defaults: (NSDictionary *) defs;
+         defaults: (NSDictionary *) defs
+      haveUpdater: (BOOL) haveUpdater;
 
 @end

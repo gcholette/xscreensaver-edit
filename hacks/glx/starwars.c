@@ -25,18 +25,6 @@
  *     starwars -program 'cat starwars.txt' -columns 25 -no-wrap
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif /* HAVE_CONFIG_H */
-
-#include <ctype.h>
-#include <sys/stat.h>
-
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-
-#include "starwars.h"
 #define DEFAULTS "*delay:    40000     \n" \
 		 "*showFPS:  False     \n" \
 		 "*fpsTop:   True      \n" \
@@ -48,12 +36,18 @@
 
 # define release_sws 0
 # define sws_handle_event xlockmore_no_events
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #include "xlockmore.h"
 #include "textclient.h"
 #include "utf8wc.h"
+#include "starwars.h"
+
+#include <ctype.h>
+#include <sys/stat.h>
+
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #ifdef USE_GL /* whole file */
 
@@ -69,6 +63,7 @@
 #define DEF_LINES      "125"
 #define DEF_STEPS      "35"
 #define DEF_SPIN       "0.03"
+#define DEF_SATURATION "0.3"
 #define DEF_SIZE       "-1"
 #define DEF_COLUMNS    "-1"
 #define DEF_LINE_WRAP  "True"
@@ -78,8 +73,7 @@
 #define DEF_FADE       "True"
 #define DEF_TEXTURES   "True"
 #define DEF_DEBUG      "False"
-
-#define DEF_FONT       "-*-utopia-bold-r-normal-*-*-360-*-*-*-*-*-*"
+#define DEF_FONT       "sans-serif 36"
 
 #define TAB_WIDTH        8
 
@@ -130,6 +124,7 @@ static sws_configuration *scs = NULL;
 static int max_lines;
 static int scroll_steps;
 static float star_spin;
+static float star_saturation;
 static float font_size;
 static int target_columns;
 static int wrap_p;
@@ -145,9 +140,11 @@ static XrmOptionDescRec opts[] = {
   {"-lines",       ".lines",     XrmoptionSepArg, 0 },
   {"-steps",       ".steps",     XrmoptionSepArg, 0 },
   {"-spin",        ".spin",      XrmoptionSepArg, 0 },
+  {"-saturation",  ".saturation",XrmoptionSepArg, 0 },
   {"-size",	   ".size",      XrmoptionSepArg, 0 },
   {"-columns",	   ".columns",   XrmoptionSepArg, 0 },
 /*{"-font",        ".font",      XrmoptionSepArg, 0 },*/
+  {"-program",	   ".program",   XrmoptionSepArg, 0 },
   {"-fade",        ".fade",      XrmoptionNoArg,  "True"   },
   {"-no-fade",     ".fade",      XrmoptionNoArg,  "False"  },
   {"-textures",    ".textures",  XrmoptionNoArg,  "True"   },
@@ -170,6 +167,7 @@ static argtype vars[] = {
   {&max_lines,      "lines",     "Integer",    DEF_LINES,     t_Int},
   {&scroll_steps,   "steps",     "Integer",    DEF_STEPS,     t_Int},
   {&star_spin,      "spin",      "Float",      DEF_SPIN,      t_Float},
+  {&star_saturation,"saturation","Float",      DEF_SATURATION,t_Float},
   {&font_size,      "size",      "Float",      DEF_SIZE,      t_Float},
   {&target_columns, "columns",   "Integer",    DEF_COLUMNS,   t_Int},
   {&wrap_p,         "lineWrap",  "Boolean",    DEF_LINE_WRAP, t_Bool},
@@ -587,9 +585,10 @@ init_stars (ModeInfo *mi, int width, int height)
       glBegin (GL_POINTS);
       for (i = 0; i < nstars / steps; i++)
         {
-          glColor3f (0.6 + frand(0.3),
-                     0.6 + frand(0.3),
-                     0.6 + frand(0.3));
+          GLfloat brightness = 0.9 - star_saturation;
+          glColor3f (brightness + frand(star_saturation),
+                     brightness + frand(star_saturation),
+                     brightness + frand(star_saturation));
           glVertex2f (2 * size * (0.5 - frand(1.0)),
                       2 * size * (0.5 - frand(1.0)));
         }

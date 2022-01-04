@@ -1,10 +1,11 @@
-/* glslideshow, Copyright (c) 2003-2014 Jamie Zawinski <jwz@jwz.org>
+/* glslideshow, Copyright (c) 2003-2020 Jamie Zawinski <jwz@jwz.org>
  * Loads a sequence of images and smoothly pans around them; crossfades
  * when loading new images.
  *
  * Originally written by Mike Oliphant <oliphant@gtk.org> (c) 2002, 2003.
  * Rewritten by jwz, 21-Jun-2003.
  * Rewritten by jwz again, 6-Feb-2005.
+ * Modified by Richard Weeks <rtweeks21@gmail.com> Copyright (c) 2020
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -16,14 +17,6 @@
  *
  *****************************************************************************
  *
- * TODO:
- *
- * - When a new image is loaded, there is a glitch: animation pauses during
- *   the period when we're loading the image-to-fade-in.  On fast (2GHz)
- *   machines, this stutter is short but noticable (usually around 1/10th
- *   second.)  On slower machines, it can be much more pronounced.
- *   This turns out to be hard to fix...
- *
  *   Image loading happens in three stages:
  *
  *    1: Fork a process and run xscreensaver-getimage in the background.
@@ -34,14 +27,11 @@
  *       (or XShmGetImage.)
  *
  *    3: Once we have the bits, we must convert them from server-native bitmap
- *       layout to 32 bit RGBA in client-endianness, to make them usable as
- *       OpenGL textures.
+ *       layout to 32 bit RGBA in client-endianness, and copy that into an
+ *       OpenGL texture.
  *
- *    4: We must actually construct a texture.
- *
- *   So, the speed of step 1 doesn't really matter, since that happens in
- *   the background.  But steps 2, 3, and 4 happen in *this* process, and
- *   cause the visible glitch.
+ *   The speed of step 1 doesn't really matter, since that happens in the
+ *   background.  Steps 2 and 3 happen in *this* process.
  *
  *   Step 2 can't be moved to another process without opening a second
  *   connection to the X server, which is pretty heavy-weight.  (That would
@@ -49,23 +39,13 @@
  *   retrieve the pixmap, and feed it back to us through a pipe or
  *   something.)
  *
- *   Step 3 might be able to be optimized by coding tuned versions of
- *   grab-ximage.c:copy_ximage() for the most common depths and bit orders.
- *   (Or by moving it into the other process along with step 2.)
+ *   Step 3 is carried out over the course of several animation frames.  The
+ *   bits are processed in "stripes" small enough to complete within a single
+ *   frame.  Each stripe is first converted to a client-endian, 32 bit RGBA
+ *   XImage, then copied into the partially completed OpenGL texture.
  *
- *   Step 4 is the hard one, though.  It might be possible to speed up this
- *   step if there is some way to allow two GL processes share texture
- *   data.  Unless, of course, all the time being consumed by step 4 is
- *   because the graphics pipeline is flooded, in which case, that other
- *   process would starve the screen anyway.
- *
- *   Is it possible to use a single GLX context in a multithreaded way?
- *   Or use a second GLX context, but allow the two contexts to share data?
- *   I can't find any documentation about this.
- *
- *   How does Apple do this with their MacOSX slideshow screen saver?
- *   Perhaps it's easier for them because their OpenGL libraries have
- *   thread support at a lower level?
+ *   This entire process is accomplished via a texture loader created with
+ *   alloc_texture_loader.
  */
 
 #define DEFAULTS  "*delay:           20000                \n" \
@@ -73,16 +53,13 @@
                   "*showFPS:         False                \n" \
 	          "*fpsSolid:        True                 \n" \
 	          "*useSHM:          True                 \n" \
-            "*titleFont: -*-helvetica-medium-r-normal-*-*-180-*-*-*-*-*-*\n" \
+                  "*titleFont: sans-serif 18\n" \
                   "*desktopGrabber:  xscreensaver-getimage -no-desktop %s\n" \
 		  "*grabDesktopImages:   False \n" \
 		  "*chooseRandomImages:  True  \n"
 
 # define release_slideshow 0
 # include "xlockmore.h"
-
-#undef countof
-#define countof(x) (sizeof((x))/sizeof((*x)))
 
 #ifdef USE_GL
 
@@ -116,6 +93,7 @@ typedef struct {
                                       on screen */
   GLuint texid;			   /* which texture contains the image */
   int refcount;			   /* how many sprites refer to this image */
+  texture_loader_t *loader; /* asynchronous image loader */
 } image;
 
 
@@ -298,6 +276,44 @@ alloc_image (ModeInfo *mi)
 }
 
 
+/* Allocate an image structure and start asynchronous file loading in the
+   background.
+
+   The texture_loader_t referenced by *result->loader must be stepped with
+   step_texture_loader() until it calls back to the callback function passed
+   to it.
+ */
+static image *
+alloc_image_incremental (ModeInfo *mi)
+{
+  slideshow_state *ss = &sss[MI_SCREEN(mi)];
+  int wire = MI_IS_WIREFRAME(mi);
+  image *img = (image *) calloc (1, sizeof (*img));
+
+  img->id = ++ss->image_id;
+  img->loaded_p = False;
+  img->used_p = False;
+  img->mi = mi;
+
+  glGenTextures (1, &img->texid);
+  if (img->texid <= 0) abort();
+
+  ss->image_load_time = ss->now;
+
+  if (wire)
+    image_loaded_cb (0, 0, 0, 0, 0, 0, img);
+  else
+    img->loader = alloc_texture_loader (mi->xgwa.screen, mi->window,
+                                        *ss->glx_context, 0, 0, mipmap_p,
+                                        img->texid);
+
+  ss->images[ss->nimages++] = img;
+  if (ss->nimages >= countof(ss->images)) abort();
+
+  return img;
+}
+
+
 /* Callback that tells us that the texture has been loaded.
  */
 static void
@@ -319,6 +335,13 @@ image_loaded_cb (const char *filename, XRectangle *geom,
       img->geom.width  = img->w;
       img->geom.height = img->h;
       goto DONE;
+    }
+
+  if (img->loader)
+    {
+      texture_loader_t *loader = img->loader;
+      img->loader = 0;
+      free_texture_loader(loader);
     }
 
   if (image_width == 0 || image_height == 0)
@@ -361,11 +384,10 @@ image_loaded_cb (const char *filename, XRectangle *geom,
   */
   if (img->title && img->title[0] == '/')
     {
-      /* strip filename to part between last "/" and last ".". */
+      /* strip filename to part between last "/" and end. */
+      /* xscreensaver-getimage has already stripped off the extension. */
       char *s = strrchr (img->title, '/');
       if (s) strcpy (img->title, s+1);
-      s = strrchr (img->title, '.');
-      if (s) *s = 0;
     }
 
   if (debug_p)
@@ -388,8 +410,8 @@ destroy_image (ModeInfo *mi, image *img)
   int i;
 
   if (!img) abort();
-  if (!img->loaded_p) abort();
-  if (!img->used_p) abort();
+  /* if (!img->loaded_p) abort(); */
+  /* if (!img->used_p) abort(); */
   if (img->texid <= 0) abort();
   if (img->refcount != 0) abort();
 
@@ -457,7 +479,7 @@ get_image (ModeInfo *mi)
   /* Make sure that there is always one unused image in the pipe.
    */
   if (!new_img && !loading_img)
-    alloc_image (mi);
+    alloc_image_incremental (mi);
 
   return img;
 }
@@ -1128,6 +1150,10 @@ init_slideshow (ModeInfo *mi)
 }
 
 
+static void
+slideshow_idle (ModeInfo *mi);
+
+
 ENTRYPOINT void
 draw_slideshow (ModeInfo *mi)
 {
@@ -1200,7 +1226,14 @@ draw_slideshow (ModeInfo *mi)
     new_sprite (mi);
 
   if (!ss->redisplay_needed_p)
-    return;
+    /* Nothing to do! Don't bother drawing a texture or even swapping the
+       frame buffers. Note that this means that the FPS display will be
+       wrong: "Load" will be frozen on whatever it last was, when in
+       reality it will be close to 0. */
+    {
+      slideshow_idle (mi);
+      return;
+    }
 
   if (debug_p && ss->now - ss->prev_frame_time > 1)
     fprintf (stderr, "%s: static screen for %.1f secs\n",
@@ -1214,6 +1247,9 @@ draw_slideshow (ModeInfo *mi)
   glXSwapBuffers (MI_DISPLAY (mi), MI_WINDOW(mi));
   ss->prev_frame_time = ss->now;
   ss->redisplay_needed_p = False;
+
+  slideshow_idle (mi);
+
   check_fps (mi);
 }
 
@@ -1222,21 +1258,49 @@ ENTRYPOINT void
 free_slideshow (ModeInfo *mi)
 {
   slideshow_state *ss = &sss[MI_SCREEN(mi)];
-  int i;
+  /* int i; */
   if (!ss->glx_context) return;
   glXMakeCurrent(MI_DISPLAY(mi), MI_WINDOW(mi), *ss->glx_context);
 
   if (ss->font_data) free_texture_font (ss->font_data);
-  for (i = 0; i < ss->nimages; i++) {
-    if (ss->images[i]) {
-      if (ss->images[i]->title) free (ss->images[i]->title);
-      if (ss->images[i]->texid) glDeleteTextures (1, &ss->images[i]->texid);
-      free (ss->images[i]);
+  ss->font_data = 0;
+
+# if 0
+  /* The lifetime of these objects is incomprehensible.
+     Doing this causes free pointers to be run from the XtInput.
+   */
+  for (i = ss->nimages-1; i >= 0; i--) {
+    if (ss->images[i] && ss->images[i]->refcount == 0)
+      destroy_image (mi, ss->images[i]);
+  }
+
+  for (i = countof(ss->sprites)-1; i >= 0; i--) {
+    if (ss->sprites[i])
+      destroy_sprite (mi, ss->sprites[i]);
+  }
+# endif
+}
+
+
+static void
+slideshow_idle (ModeInfo *mi)
+{
+  slideshow_state *ss = &sss[MI_SCREEN(mi)];
+  double end_by_time = ss->now + ((double) mi->pause) / 2000000;
+  int i;
+
+  for (i = 0; i < ss->nimages; i++)
+    {
+      image *img = ss->images[i];
+      if (img->loader)
+        {
+          if (texture_loader_failed (img->loader))
+            abort();
+          step_texture_loader (img->loader, end_by_time - double_time(),
+                               image_loaded_cb, img);
+          break; /* only do the first one! */
+        }
     }
-  }
-  for (i = 0; i < countof(ss->sprites); i++) {
-    if (ss->sprites[i]) free (ss->sprites[i]);
-  }
 }
 
 XSCREENSAVER_MODULE_2 ("GLSlideshow", glslideshow, slideshow)

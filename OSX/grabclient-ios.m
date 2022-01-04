@@ -1,4 +1,4 @@
-/* xscreensaver, Copyright (c) 1992-2017 Jamie Zawinski <jwz@jwz.org>
+/* xscreensaver, Copyright (c) 1992-2019 Jamie Zawinski <jwz@jwz.org>
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
  * documentation for any purpose is hereby granted without fee, provided that
@@ -12,7 +12,7 @@
 /* iOS 8+ code to choose and return a random image from the photo library.
  */
 
-#ifdef USE_IPHONE  // whole file
+#ifdef HAVE_IPHONE  // whole file
 
 #import <Photos/Photos.h>
 #import "grabscreen.h"
@@ -41,7 +41,7 @@ ios_load_random_image (void (*callback) (void *uiimage, const char *fn,
 
   // The rest of this is synchronous.
 
-  PHFetchOptions *opt = [PHFetchOptions new];
+  PHFetchOptions *opt = [[PHFetchOptions new] autorelease];
   opt.includeAssetSourceTypes = (PHAssetSourceTypeUserLibrary |
                                  PHAssetSourceTypeCloudShared |
                                  PHAssetSourceTypeiTunesSynced);
@@ -67,7 +67,7 @@ ios_load_random_image (void (*callback) (void *uiimage, const char *fn,
       contentMode: PHImageContentModeDefault
       options: opt
       resultHandler:^void (UIImage *image, NSDictionary *info) {
-        img = image;
+        img = [image retain];
     }];
 
     // Get the image name.
@@ -92,4 +92,4 @@ ios_load_random_image (void (*callback) (void *uiimage, const char *fn,
     callback (0, 0, 0, 0, closure);
 }
 
-#endif  // USE_IPHONE - whole file
+#endif  // HAVE_IPHONE - whole file
